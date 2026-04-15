@@ -1,0 +1,16 @@
+.tools
+.task
+.env
+.idea/
+dist/
+build/**/*
+!build/.gitkeep
+!build/server/
+!build/server/.gitkeep
+!build/launcher/
+!build/launcher/.gitkeep
+!build/battle-server-manager/
+!build/battle-server-manager/.gitkeep
+.goreleaser.yaml
+tools/**/go.sum
+go.work.sum

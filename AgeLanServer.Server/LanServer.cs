@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using AgeLanServer.Common;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -19,7 +20,7 @@ public static class LanServer
     private static readonly ConcurrentDictionary<string, Lobby> Lobbies = new();
     private static readonly ConcurrentDictionary<string, Player> Players = new();
     private static readonly ConcurrentDictionary<string, GameSession> Sessions = new();
-    private static string _serverId = Guid.NewGuid().ToString("N")[..12];
+    private static readonly Guid _serverId = Guid.NewGuid();
     private static string _currentGame = string.Empty;
 
     /// <summary>
@@ -85,6 +86,8 @@ public static class LanServer
     public static async Task RunAsync(ServerConfig config, CancellationToken ct = default)
     {
         _currentGame = config.GameId;
+        InitializeServerRuntime();
+
         var builder = WebApplication.CreateBuilder();
 
         // Cấu hình HTTPS
@@ -134,8 +137,8 @@ public static class LanServer
         // Header thông báo
         _app.Use(async (context, next) =>
         {
-			context.Response.Headers["X-Server-Id"] = _serverId;
-			context.Response.Headers["X-Announce-Version"] = AnnounceVersions.Latest.ToString();
+            context.Response.Headers[AppConstants.IdHeader] = _serverId.ToString();
+            context.Response.Headers[AppConstants.VersionHeader] = AnnounceVersions.Latest.ToString();
             context.Response.Headers["X-Game-Title"] = _currentGame;
             await next();
         });
@@ -146,6 +149,19 @@ public static class LanServer
         AppLogger.Info($"Game: {_currentGame}");
 
         await _app.RunAsync(ct);
+    }
+
+    private static void InitializeServerRuntime()
+    {
+        ServerRuntime.Id = _serverId;
+        ServerRuntime.AnnounceMessageData = new Dictionary<int, AnnounceMessageDataV2>
+        {
+            [AnnounceVersions.Latest] = new AnnounceMessageDataV2
+            {
+                GameTitle = _currentGame,
+                Version = "1.0"
+            }
+        };
     }
 
     /// <summary>
@@ -227,15 +243,6 @@ public static class LanServer
     /// </summary>
     private static void RegisterEndpoints(WebApplication app)
     {
-        // === Health check & test endpoint ===
-        app.MapGet("/test", () => Results.Ok(new
-        {
-            ServerId = _serverId,
-            GameTitle = _currentGame,
-            Version = "1.0",
-            AnnounceVersion = AnnounceVersions.Latest
-        }));
-
         // === API endpoints chính ===
 
         // Login endpoint
@@ -526,14 +533,6 @@ public static class LanServer
                 return Results.Content(await File.ReadAllTextAsync(path), "application/json");
             return Results.Ok(new { Files = Array.Empty<object>() });
         });
-
-        // === Shutdown endpoint ===
-        app.MapPost("/shutdown", () =>
-        {
-            AppLogger.Info("Nhận yêu cầu dừng server");
-            Environment.Exit(0);
-            return Results.Ok();
-        });
     }
 
     /// <summary>
@@ -552,7 +551,7 @@ public static class LanServer
         return new Dictionary<string, object>
         {
             ["SessionKey"] = Guid.NewGuid().ToString("N"),
-            ["ServerId"] = _serverId,
+            ["ServerId"] = _serverId.ToString(),
             ["GameTitle"] = _currentGame
         };
     }

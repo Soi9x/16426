@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+version: '3'
+
+dotenv: [ '.env', '{{.ENV}}/.env.', '{{.HOME}}/.env' ]
+
+tasks:
+  build-goreleaser-cfg:
+    internal: true
+    cmds:
+      - go run tools/scripts/cmd/generateGoreleaserConfig.go "{{ .GOROOT_LEGACY }}"
+  build:
+    deps:
+      - build-goreleaser-cfg
+    cmds:
+      - goreleaser build --clean --snapshot
+  release:
+    deps:
+      - build-goreleaser-cfg
+    cmds:
+      - goreleaser release --clean --snapshot --fail-fast
+  release-no-sign:
+    deps:
+      - build-goreleaser-cfg
+    cmds:
+      - goreleaser release --clean --snapshot --fail-fast --skip=sign
+includes:
+  debug: ./Taskfile.debug.yml
+  tools: ./Taskfile.tools.yml

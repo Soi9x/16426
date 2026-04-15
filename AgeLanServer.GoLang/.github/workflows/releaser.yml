@@ -1,0 +1,52 @@
+name: goreleaser
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.2'
+          cache-dependency-path: |
+            go.work.sum
+      - name: Set up Go legacy
+        id: setup_go_legacy
+        run: |
+          dir="${{ vars.GOROOT_LEGACY }}"
+          subdir="go-legacy-win7"
+          curl -L https://github.com/thongtech/$subdir/releases/download/v1.26.2-1/$subdir-1.26.2-1.linux_amd64.tar.gz -o go.tar.gz
+          sudo mkdir -p "$dir"
+          sudo tar -C "$dir" --strip-components=1 -xzf go.tar.gz
+          rm go.tar.gz
+          echo "goroot=$dir/$subdir" >> $GITHUB_OUTPUT
+      - name: Generate Goreleaser config
+        shell: bash
+        run: |
+          go run tools/scripts/cmd/generateGoreleaserConfig.go "${{ steps.setup_go_legacy.outputs.goroot }}"
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --fail-fast
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}

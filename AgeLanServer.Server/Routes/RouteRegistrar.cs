@@ -17,6 +17,7 @@ using AgeLanServer.Server.Routes.News;
 using AgeLanServer.Server.Routes.Party;
 using AgeLanServer.Server.Routes.PlayerReport;
 using AgeLanServer.Server.Routes.Relationship;
+using AgeLanServer.Server.Routes.Test;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
 
@@ -140,11 +141,7 @@ public static class RouteRegistrar
     public static void RegisterGeneralRoutes(WebApplication app)
     {
         // Test endpoint
-        app.MapGet("/test", () => Results.Ok(new
-        {
-            Version = "1.0",
-            Status = "running"
-        }));
+        app.MapGet("/test", TestEndpoint.HandleTest);
 
         // CA cert endpoint - trả về file cacert.pem từ Resources/etc/
         CacertPemEndpoint.RegisterEndpoint(app);

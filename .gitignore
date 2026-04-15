@@ -1,0 +1,16 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# IDE files
+.vs/
+*.user
+*.suo
+*.swp
+
+# Logs and temp
+*.log
+*.tmp
+
+# Local packages / archives
+*.zip

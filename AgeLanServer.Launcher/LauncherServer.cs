@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AgeLanServer.Common;
 using AgeLanServer.Launcher.Internal.CmdUtils.Logger;
 using AgeLanServer.LauncherCommon;
@@ -49,7 +50,10 @@ public static class ServerModule
     /// </summary>
     public class AnnounceMessageDataSupportedLatest
     {
+        [JsonPropertyName("game_title")]
         public string GameTitle { get; set; } = string.Empty;
+
+        [JsonPropertyName("version")]
         public string Version { get; set; } = string.Empty;
     }
 
