@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AgeLanServer.LauncherAgent</RootNamespace>
+    <AssemblyName>agent</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AgeLanServer.Common\AgeLanServer.Common.csproj" />
+    <ProjectReference Include="..\AgeLanServer.LauncherCommon\AgeLanServer.LauncherCommon.csproj" />
+    <ProjectReference Include="..\AgeLanServer.BattleServerBroadcast\AgeLanServer.BattleServerBroadcast.csproj" />
+    <ProjectReference Include="..\AgeLanServer.BattleServerManager\AgeLanServer.BattleServerManager.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+  </ItemGroup>
+</Project>

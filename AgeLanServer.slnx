@@ -1,0 +1,13 @@
+<Solution>
+  <Project Path="AgeLanServer.BattleServerBroadcast/AgeLanServer.BattleServerBroadcast.csproj" />
+  <Project Path="AgeLanServer.BattleServerManager/AgeLanServer.BattleServerManager.csproj" />
+  <Project Path="AgeLanServer.Common/AgeLanServer.Common.csproj" />
+  <Project Path="AgeLanServer.Launcher/AgeLanServer.Launcher.csproj" />
+  <Project Path="AgeLanServer.LauncherAgent/AgeLanServer.LauncherAgent.csproj" />
+  <Project Path="AgeLanServer.LauncherCommon/AgeLanServer.LauncherCommon.csproj" />
+  <Project Path="AgeLanServer.LauncherConfig/AgeLanServer.LauncherConfig.csproj" />
+  <Project Path="AgeLanServer.LauncherConfigAdmin/AgeLanServer.LauncherConfigAdmin.csproj" />
+  <Project Path="AgeLanServer.LauncherConfigAdminAgent/AgeLanServer.LauncherConfigAdminAgent.csproj" />
+  <Project Path="AgeLanServer.Server/AgeLanServer.Server.csproj" />
+  <Project Path="AgeLanServer.ServerGenCert/AgeLanServer.ServerGenCert.csproj" />
+</Solution>
