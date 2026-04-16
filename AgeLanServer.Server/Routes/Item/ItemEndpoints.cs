@@ -1,4 +1,4 @@
-﻿using AgeLanServer.Common;
+using AgeLanServer.Common;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using AgeLanServer.Server.Internal;
@@ -25,6 +25,7 @@ public static class ItemEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/item");
+        var gameId = GetCurrentGameTitleStatic();
 
         // Láº¥y Ä‘á»‹nh nghÄ©a items (JSON Ä‘Ã£ kÃ½)
         group.MapGet("/getItemDefinitionsJson", HandleGetItemDefinitionsJson);
@@ -35,33 +36,36 @@ public static class ItemEndpoints
         // KÃ½ items (chÆ°a triá»ƒn khai)
         group.MapPost("/signItems", HandleSignItems);
 
-        // Láº¥y bundle items (JSON Ä‘Ã£ kÃ½)
-        group.MapGet("/getItemBundleItemsJson", HandleGetItemBundleItemsJson);
+        if (gameId != GameIds.AgeOfEmpires1)
+        {
+            // Láº¥y bundle items (JSON Ä‘Ã£ kÃ½)
+            group.MapGet("/getItemBundleItemsJson", HandleGetItemBundleItemsJson);
 
-        // Láº¥y inventory theo profile IDs
-        group.MapGet("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
-        group.MapPost("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
+            // Láº¥y inventory theo profile IDs
+            group.MapGet("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
+            group.MapPost("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
 
-        // Detach items (thÃ¡o item khá»i vá»‹ trÃ­)
-        group.MapPost("/detachItems", HandleDetachItems);
+            // Detach items (thÃ¡o item khá»i vá»‹ trÃ­)
+            group.MapPost("/detachItems", HandleDetachItems);
 
-        // Láº¥y báº£ng level rewards (JSON Ä‘Ã£ kÃ½)
-        group.MapGet("/getLevelRewardsTableJson", HandleGetLevelRewardsTableJson);
+            // Láº¥y báº£ng level rewards (JSON Ä‘Ã£ kÃ½)
+            group.MapGet("/getLevelRewardsTableJson", HandleGetLevelRewardsTableJson);
 
-        // Di chuyá»ƒn item
-        group.MapPost("/moveItem", HandleMoveItem);
+            // Di chuyá»ƒn item
+            group.MapPost("/moveItem", HandleMoveItem);
 
-        // Cáº­p nháº­t thuá»™c tÃ­nh items
-        group.MapPost("/updateItemAttributes", HandleUpdateItemAttributes);
+            // Cáº­p nháº­t thuá»™c tÃ­nh items
+            group.MapPost("/updateItemAttributes", HandleUpdateItemAttributes);
 
-        // Táº¡o loadout item
-        group.MapPost("/createItemLoadout", HandleCreateItemLoadout);
+            // Táº¡o loadout item
+            group.MapPost("/createItemLoadout", HandleCreateItemLoadout);
 
-        // Equip loadout
-        group.MapPost("/equipItemLoadout", HandleEquipItemLoadout);
+            // Equip loadout
+            group.MapPost("/equipItemLoadout", HandleEquipItemLoadout);
 
-        // Cáº­p nháº­t loadout
-        group.MapPost("/updateItemLoadout", HandleUpdateItemLoadout);
+            // Cáº­p nháº­t loadout
+            group.MapPost("/updateItemLoadout", HandleUpdateItemLoadout);
+        }
 
         // Láº¥y giÃ¡ items
         group.MapGet("/getItemPrices", HandleGetItemPrices);
@@ -550,7 +554,7 @@ public static class ItemEndpoints
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
     // Kho lÆ°u trá»¯ items vÃ  loadouts theo user ID

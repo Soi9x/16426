@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
+using AgeLanServer.Server.Routes.Login;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -126,6 +127,33 @@ public static class LanServer
         }
 
         _app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+        _app.UseWebSockets();
+
+        _app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path.Value ?? string.Empty;
+            if (!path.StartsWith("/game", StringComparison.OrdinalIgnoreCase) || IsAnonymousGamePath(path))
+            {
+                await next();
+                return;
+            }
+
+            var sessionId = await ResolveSessionIdAsync(context);
+            if (string.IsNullOrWhiteSpace(sessionId) || !LoginEndpoints.Sessions.TryGetValue(sessionId, out var session))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsync("Unauthorized");
+                return;
+            }
+
+            context.Items["SessionId"] = sessionId;
+            context.Items["UserId"] = session.UserId;
+            context.Items["ProfileId"] = session.ProfileId;
+            context.Items["UserName"] = session.Alias;
+            context.Items["ClientLibVersion"] = session.ClientLibVersion;
+
+            await next();
+        });
 
         // 1. Đăng ký các API endpoints gốc (Minimal)
         RegisterEndpoints(_app);
@@ -164,6 +192,57 @@ public static class LanServer
                 Version = "1.0"
             }
         };
+    }
+
+    private static bool IsAnonymousGamePath(string path)
+    {
+        if (path.Equals("/game/msstore/getStoreTokens", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/game/login/platformlogin", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/game/news/getNews", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/game/Challenge/getChallenges", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/game/item/getItemBundleItemsJson", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static async Task<string?> ResolveSessionIdAsync(HttpContext context)
+    {
+        var sessionId = context.Request.Query["sessionID"].ToString();
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            return sessionId;
+        }
+
+        if (context.Request.HasFormContentType)
+        {
+            var form = await context.Request.ReadFormAsync(context.RequestAborted);
+            if (form.TryGetValue("sessionID", out var formSessionId) && !string.IsNullOrWhiteSpace(formSessionId))
+            {
+                return formSessionId.ToString();
+            }
+        }
+
+        if (context.Request.Cookies.TryGetValue("sessionID", out var sessionCookie) && !string.IsNullOrWhiteSpace(sessionCookie))
+        {
+            return sessionCookie;
+        }
+
+        if (context.Request.Cookies.TryGetValue("session_id", out var legacySessionCookie) && !string.IsNullOrWhiteSpace(legacySessionCookie))
+        {
+            return legacySessionCookie;
+        }
+
+        if (context.Request.Cookies.TryGetValue("reliclink", out var reliclinkCookie) &&
+            !string.IsNullOrWhiteSpace(reliclinkCookie) &&
+            LoginEndpoints.Sessions.ContainsKey(reliclinkCookie))
+        {
+            return reliclinkCookie;
+        }
+
+        return null;
     }
 
     /// <summary>

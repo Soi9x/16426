@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.WebSocket;
@@ -23,6 +24,7 @@ public static class AdvertisementEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/advertisement");
+        var gameId = GetCurrentGameId();
 
         // Tạo lobby mới
         group.MapPost("/host", HandleHost);
@@ -37,37 +39,66 @@ public static class AdvertisementEndpoints
         group.MapPost("/update", HandleUpdate);
 
         // Tìm kiếm advertisements (POST hoặc GET tùy game)
-        group.MapGet("/findAdvertisements", HandleFindAdvertisements);
-        group.MapPost("/findAdvertisements", HandleFindAdvertisements);
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/findAdvertisements", HandleFindAdvertisements);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapGet("/findAdvertisements", HandleFindAdvertisements);
+        }
 
         // Lấy danh sách advertisements theo match IDs
         group.MapGet("/getAdvertisements", HandleGetAdvertisements);
 
         // Lấy danh sách LAN advertisements
-        group.MapGet("/getLanAdvertisements", HandleGetLanAdvertisements);
-        group.MapPost("/getLanAdvertisements", HandleGetLanAdvertisements);
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/getLanAdvertisements", HandleGetLanAdvertisements);
+        }
+        else if (gameId == GameIds.AgeOfEmpires2)
+        {
+            group.MapGet("/getLanAdvertisements", HandleGetLanAdvertisements);
+        }
 
         // Cập nhật tags
-        group.MapPost("/updateTags", HandleUpdateTags);
+        if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapPost("/updateTags", HandleUpdateTags);
+        }
 
         // Cập nhật platform session ID
-        group.MapPost("/updatePlatformSessionID", HandleUpdatePlatformSessionId);
+        if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapPost("/updatePlatformSessionID", HandleUpdatePlatformSessionId);
+        }
 
         // Cập nhật platform lobby ID
-        group.MapPost("/updatePlatformLobbyID", HandleUpdatePlatformLobbyId);
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/updatePlatformLobbyID", HandleUpdatePlatformLobbyId);
+        }
 
         // Bắt đầu quan sát
-        group.MapPost("/startObserving", HandleStartObserving);
-
-        // Dừng quan sát
-        group.MapPost("/stopObserving", HandleStopObserving);
+        if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires3 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapPost("/startObserving", HandleStartObserving);
+            // Dừng quan sát
+            group.MapPost("/stopObserving", HandleStopObserving);
+        }
 
         // Cập nhật trạng thái
         group.MapPost("/updateState", HandleUpdateState);
 
         // Tìm advertisements có thể quan sát
-        group.MapGet("/findObservableAdvertisements", HandleFindObservableAdvertisements);
-        group.MapPost("/findObservableAdvertisements", HandleFindObservableAdvertisements);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/findObservableAdvertisements", HandleFindObservableAdvertisements);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapGet("/findObservableAdvertisements", HandleFindObservableAdvertisements);
+        }
     }
 
     /// <summary>
@@ -437,6 +468,11 @@ public static class AdvertisementEndpoints
             adv.Observable ? 1 : 0,       // 11: Observable
             new DateTimeOffset(adv.CreatedAt).ToUnixTimeSeconds() // 12: Created time
         };
+    }
+
+    private static string GetCurrentGameId()
+    {
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }
 

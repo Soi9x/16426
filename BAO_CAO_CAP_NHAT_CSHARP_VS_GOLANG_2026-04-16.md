@@ -186,3 +186,108 @@ Sau chỉnh sửa, flow dữ liệu presence và endpoint compatibility đã sá
 
 5. **Login battle server fallback**
    - khi chưa có battle server cấu hình, response vẫn có localhost fallback như Go.
+
+---
+
+## 8) Cập nhật tiếp theo (đợt rà soát bổ sung)
+
+### 8.1 Session/auth context cho game routes đã được nối vào pipeline
+- Đã thêm middleware runtime trong `LanServer` để:
+  - xác thực `sessionID` cho các `/game/*` route (trừ anonymous paths giống Go)
+  - set `HttpContext.Items["SessionId"|"UserId"|"UserName"|"ClientLibVersion"]`
+- Đây là điểm quan trọng để `setPresence`, `setPresenceProperty`, `readSession`, `logout` không còn chạy “mất session”.
+
+### 8.2 WebSocket đã nối đúng với message sender dùng bởi routes
+- Đã bật `UseWebSockets()` trong pipeline.
+- `WebSocketEndpoints` giờ dùng chung `WsMessageSender.HandleConnectionAsync(...)`.
+- Tránh tình trạng trước đây có 2 hệ quản lý connection tách biệt làm notify presence không tới client realtime.
+
+### 8.3 Login + Relationship đã được tăng parity gần Go
+- `platformlogin`:
+  - giữ user identity theo `platformUserID` (không tạo user hoàn toàn mới mỗi lần login cùng tài khoản)
+  - response shape bổ sung các trường profile gần hơn với Go
+  - nạp login key/value từ `resources/config/{game}/login.json`
+  - phát presence notify ngay sau login
+- `getRelationships`:
+  - dùng profile-info có kèm presence tương thích hơn
+  - phân nhánh friends/lastConnection theo game như Go
+- `setPresence` và `setPresenceProperty`:
+  - cập nhật trạng thái/thuộc tính đúng session
+  - broadcast `PresenceMessage` theo flow Go
+  - hỗ trợ remove presence property khi value rỗng
+
+### 8.4 Bind JSON đã hỗ trợ alias key như form/query
+- `HttpHelpers.BindAsync` (nhánh `application/json`) đã bind theo cùng bộ key linh hoạt:
+  - PascalCase / camelCase / snake_case / ID suffix
+  - alias qua `[BindAlias(...)]`
+- Giảm rủi ro payload JSON dùng key kiểu Go nhưng không map vào DTO C#.
+
+### 8.5 Đồng bộ runtime game id thêm cho nhiều route response loaders
+- Các route trước đó hardcode `age4` (achievement/automatch/challenge/item/leaderboard/chat/cloud/community event) đã fallback theo `ServerRuntime.CurrentGameId`.
+- Giảm sai lệch dữ liệu file responses/config khi chạy game khác `age4`.
+
+### 8.6 Rà soát bổ sung nhóm account / invitation / party
+- `AccountEndpoints` đã chỉnh lại theo Go gần hơn:
+  - `setLanguage` trả `2` như Go hiện tại.
+  - `FindProfilesByPlatformID` lọc theo `platformUserID` thay vì nhầm sang profile id.
+  - `FindProfiles` và `getProfileName` trả profile payload theo encode flow dùng ở login.
+  - `setAvatarMetadata` trả profile info sau update.
+  - `get/add/clear profile property` dùng key theo user hiện tại, response shape sát Go hơn.
+- `RouteDtos` đã bổ sung alias Go-specific cho invitation payload:
+  - `inviteeid`, `gatheringpassword`, `invitationreply`, `inviterid`.
+- `InvitationEndpoints` và `PartyEndpoints` đã chỉnh lookup session theo **user id** (không dùng nhầm profile id), giúp notify đúng người nhận.
+
+### 8.7 WebSocket session-switch parity
+- `WsMessageSender.HandleConnectionAsync` đã thêm kiểm tra session tồn tại khi đổi `sessionToken` (operation=0), và ngắt kết nối nếu token không hợp lệ hoặc session hết hạn.
+- Hành vi này bám sát loop xác thực session phía Go hơn, tránh giữ websocket sống với session rỗng/hỏng.
+
+### 8.8 Cloudfiles compatibility
+- Bổ sung map route cho cả:
+  - `GET /cloudfiles`
+  - `GET /cloudfiles/`
+  - `GET /cloudfiles/{*path}`
+- Tăng khả năng tương thích pattern gọi từ client và tương đương Go route prefix handling.
+
+### 8.9 Quét cuối cùng (final pass)
+- Rà soát lại toàn bộ nhóm route gameplay và binding key theo schema Go.
+- Không phát hiện thêm mismatch nghiêm trọng ảnh hưởng trực tiếp flow online/offline.
+- Bổ sung hardening nhỏ ở `Account/setCrossplayEnabled`:
+  - trả mã lỗi `2` nếu request không phải form content-type, tránh lỗi parse form trong trường hợp payload sai định dạng.
+
+---
+
+## 9) Rà soát end-to-end trước phát hành (đợt chốt)
+
+### 9.1 Siết parity điều kiện đăng ký route theo từng game
+Đã áp dụng lại điều kiện map route sát `router/game.go` của Go cho các nhóm:
+- `AccountEndpoints` (property routes chỉ cho age3/age4/athens)
+- `AutomatchEndpoints` (age4 dùng `/automatch`, game khác dùng `/automatch2`)
+- `ChallengeEndpoints` (phân tách GET/POST `getChallengeProgress`, `updateProgress`, `updateProgressBatched` theo game)
+- `ChatEndpoints` (method/path tách theo game: getChatChannels, join/leave/sendText/sendWhisper/sendWhispers/deleteOfflineMessage)
+- `CloudEndpoints` (`getFileURL` theo method/game; giữ `getTempCredentials`)
+- `CommunityEventEndpoints` (`getEventStats/getEventLeaderboard` chỉ age4/athens)
+- `ItemEndpoints` (route nâng cao chỉ bật cho non-age1)
+- `LeaderboardEndpoints` (`getRecentMatchHistory` method theo game, avatar/single-player route theo game)
+- `PartyEndpoints` (`createOrReportSinglePlayer` chỉ age4/athens)
+- `RelationshipEndpoints` (method `getRelationships` và route `setPresenceProperty`/`addfriend` theo game)
+- `AdvertisementEndpoints` (chuẩn hóa method/path condition cho find/getLan/tags/platform/start-stop observing/findObservable)
+
+### 9.2 Đồng bộ non-game additional routes theo Go
+- `AdditionalRouteRegistrar` đã điều kiện hóa:
+  - CDN status route không bật cho `age4` (đúng behavior Go)
+  - CloudFiles route chỉ bật cho `age2/age3`
+
+### 9.3 Bổ sung alias bind cho các schema Go đặc thù
+Đã thêm/siết alias trong `RouteDtos` cho các key có pattern khó map tự động:
+- `automatchPoll_id`
+- `isObservable`
+- `gatheringid`
+- `metaData`
+- `avatarStat_ids`
+- `recipientIDs`, `recipientID`
+- `targetProfileID`
+
+### 9.4 Kết luận readiness
+- Luồng trọng yếu (login/session/presence/relationship/websocket) + điều kiện route registration theo game đã sát Go hơn đáng kể.
+- Hệ route C# hiện liền mạch hơn với Go cho mục tiêu release LAN runtime.
+- Các endpoint còn simplified/stub (đã ghi ở các mục trước) không phải regression mới của đợt chốt này và có thể tách thành phase parity 1:1 tiếp theo.

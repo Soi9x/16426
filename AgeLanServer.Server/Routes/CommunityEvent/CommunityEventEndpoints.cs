@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgeLanServer.Common;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -20,15 +21,19 @@ public static class CommunityEventEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/CommunityEvent");
+        var gameId = GetCurrentGameTitle(null);
 
         // Lấy danh sách community events có sẵn
         group.MapGet("/getAvailableCommunityEvents", HandleGetAvailableCommunityEvents);
 
-        // Lấy leaderboard event (AoE4/AoM only)
-        group.MapGet("/getEventLeaderboard", HandleGetEventLeaderboard);
+        if (gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            // Lấy leaderboard event (AoE4/AoM only)
+            group.MapGet("/getEventLeaderboard", HandleGetEventLeaderboard);
 
-        // Lấy stats event (AoE4/AoM only)
-        group.MapGet("/getEventStats", HandleGetEventStats);
+            // Lấy stats event (AoE4/AoM only)
+            group.MapGet("/getEventStats", HandleGetEventStats);
+        }
     }
 
     /// <summary>
@@ -98,16 +103,15 @@ public static class CommunityEventEndpoints
     /// Helper: Lấy game title từ context.
     /// Ưu tiên lấy từ header X-Game-Title, fallback về "age4".
     /// </summary>
-    private static string GetCurrentGameTitle(HttpContext ctx)
+    private static string GetCurrentGameTitle(HttpContext? ctx)
     {
-        // Lấy game title từ header
-        if (ctx.Request.Headers.TryGetValue("X-Game-Title", out var headerTitle) &&
+        if (ctx != null &&
+            ctx.Request.Headers.TryGetValue("X-Game-Title", out var headerTitle) &&
             !string.IsNullOrEmpty(headerTitle))
         {
             return headerTitle.ToString();
         }
 
-        // Mặc định dùng age4
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }

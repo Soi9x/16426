@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Web;
 using AgeLanServer.Common;
-using AgeLanServer.Server.Routes.Shared;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -24,10 +24,17 @@ public static class CloudEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/cloud");
+        var gameId = GetCurrentGameTitle(null);
 
         // Lấy URL file (POST cho AoE3, GET cho AoE2/AoE4)
-        group.MapGet("/getFileURL", HandleGetFileUrl);
-        group.MapPost("/getFileURL", HandleGetFileUrl);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/getFileURL", HandleGetFileUrl);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4)
+        {
+            group.MapGet("/getFileURL", HandleGetFileUrl);
+        }
 
         // Lấy thông tin xác thực tạm thời
         group.MapGet("/getTempCredentials", HandleGetTempCredentials);
@@ -104,17 +111,16 @@ public static class CloudEndpoints
     /// Helper: Lấy game title từ context.
     /// Ưu tiên lấy từ header X-Game-Title, fallback về "age4".
     /// </summary>
-    private static string GetCurrentGameTitle(HttpContext ctx)
+    private static string GetCurrentGameTitle(HttpContext? ctx)
     {
-        // Lấy game title từ header hoặc query string
-        if (ctx.Request.Headers.TryGetValue("X-Game-Title", out var headerTitle) &&
+        if (ctx != null &&
+            ctx.Request.Headers.TryGetValue("X-Game-Title", out var headerTitle) &&
             !string.IsNullOrEmpty(headerTitle))
         {
             return headerTitle.ToString();
         }
 
-        // Mặc định dùng age4
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
     /// <summary>

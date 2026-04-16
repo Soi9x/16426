@@ -81,15 +81,18 @@ public static class HttpHelpers
             else if (request.ContentType != null && request.ContentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
             {
                 // Bind từ JSON body
-                var options = new JsonSerializerOptions
+                using var doc = await JsonDocument.ParseAsync(request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 {
-                    PropertyNameCaseInsensitive = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                };
-                var obj = await JsonSerializer.DeserializeAsync<T>(request.Body, options);
-                if (obj != null)
+                    BindFromJsonObject(doc.RootElement, destination!);
+                }
+                else
                 {
-                    CopyProperties(obj, destination);
+                    var obj = JsonSerializer.Deserialize<T>(doc.RootElement.GetRawText(), JsonOptions);
+                    if (obj != null)
+                    {
+                        CopyProperties(obj, destination);
+                    }
                 }
             }
             else
@@ -136,6 +139,54 @@ public static class HttpHelpers
 
             return null;
         });
+    }
+
+    private static void BindFromJsonObject(JsonElement root, object destination)
+    {
+        var props = destination.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        foreach (var prop in props)
+        {
+            if (!prop.CanWrite)
+            {
+                continue;
+            }
+
+            foreach (var key in GetBindingKeys(prop))
+            {
+                if (!TryGetJsonPropertyIgnoreCase(root, key, out var valueElement))
+                {
+                    continue;
+                }
+
+                if (TryConvertJsonElement(valueElement, prop.PropertyType, out var converted))
+                {
+                    prop.SetValue(destination, converted);
+                }
+
+                break;
+            }
+        }
+    }
+
+    private static bool TryGetJsonPropertyIgnoreCase(JsonElement root, string key, out JsonElement value)
+    {
+        if (root.TryGetProperty(key, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            if (string.Equals(property.Name, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
     }
 
     private static void BindFromValues(object destination, Func<string, string?> valueProvider)

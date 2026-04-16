@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgeLanServer.Common;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -21,12 +22,20 @@ public static class ChallengeEndpoints
 
     public static void RegisterEndpoints(WebApplication app)
     {
+        var gameId = GetCurrentGameTitleStatic();
+
         // Route với chữ C hoa (legacy)
         var legacyGroup = app.MapGroup("/game/Challenge");
 
         // Lấy progress challenge
-        legacyGroup.MapGet("/getChallengeProgress", HandleGetChallengeProgress);
-        legacyGroup.MapPost("/getChallengeProgress", HandleGetChallengeProgress);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            legacyGroup.MapPost("/getChallengeProgress", HandleGetChallengeProgress);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            legacyGroup.MapGet("/getChallengeProgress", HandleGetChallengeProgress);
+        }
 
         // Lấy danh sách challenges
         legacyGroup.MapGet("/getChallenges", HandleGetChallenges);
@@ -34,11 +43,17 @@ public static class ChallengeEndpoints
         // Route với chữ c thường
         var group = app.MapGroup("/game/challenge");
 
-        // Cập nhật progress
-        group.MapPost("/updateProgress", HandleUpdateProgress);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            // Cập nhật progress
+            group.MapPost("/updateProgress", HandleUpdateProgress);
+        }
 
-        // Cập nhật progress batched
-        group.MapPost("/updateProgressBatched", HandleUpdateProgressBatched);
+        if (gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            // Cập nhật progress batched
+            group.MapPost("/updateProgressBatched", HandleUpdateProgressBatched);
+        }
     }
 
 
@@ -91,6 +106,6 @@ public static class ChallengeEndpoints
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }
