@@ -81,11 +81,13 @@ public static class AdvertisementEndpoints
         var bound = await HttpHelpers.BindAsync(ctx.Request, req);
         if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
         {
+            logger.LogWarning("Route /game/advertisement/host từ chối request do bind/session không hợp lệ");
             return Results.Ok(EncodeHostErrorResponse(ctx));
         }
 
         if (req.Id != -1)
         {
+            logger.LogWarning("Route /game/advertisement/host từ chối request: advertisementid phải = -1 (actual={AdvertisementId})", req.Id);
             return Results.Ok(EncodeHostErrorResponse(ctx));
         }
 
@@ -95,8 +97,19 @@ public static class AdvertisementEndpoints
             RemoveUserFromAdvertisements(session.UserId);
         }
 
+        if (gameId != GameIds.AgeOfEmpires4 && string.Equals(req.Description, "SESSION_MATCH_KEY", StringComparison.Ordinal))
+        {
+            logger.LogWarning("Route /game/advertisement/host từ chối matchmaking session chưa được hỗ trợ cho game {GameId}", gameId);
+            return Results.Ok(EncodeHostErrorResponse(ctx));
+        }
+
         var isLan = req.ServiceType != 0 || BattleServerRuntime.IsLanRegion(req.RelayRegion);
-        var battleServer = ResolveBattleServer(req.RelayRegion, isLan);
+        if (!TryResolveBattleServer(req.RelayRegion, isLan, out var battleServer, out var resolveError))
+        {
+            logger.LogWarning("Route /game/advertisement/host từ chối request: {Reason}. RelayRegion={RelayRegion}, IsLan={IsLan}",
+                resolveError, req.RelayRegion, isLan);
+            return Results.Ok(EncodeHostErrorResponse(ctx));
+        }
 
         var joinable = req.Joinable;
         if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3 or GameIds.AgeOfMythology)
@@ -169,7 +182,7 @@ public static class AdvertisementEndpoints
         var bound = await HttpHelpers.BindAsync(ctx.Request, req);
         if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, CreateDefaultBattleServer(), Array.Empty<object>()));
+            return JoinError(ctx, logger, "bind/session không hợp lệ", CreateDefaultBattleServer(), req.Id);
         }
 
         var gameId = GetCurrentGameId();
@@ -180,27 +193,27 @@ public static class AdvertisementEndpoints
 
         if (!Advertisements.TryGetValue(req.Id, out var adv))
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, CreateDefaultBattleServer(), Array.Empty<object>()));
+            return JoinError(ctx, logger, "không tìm thấy advertisement", CreateDefaultBattleServer(), req.Id);
         }
 
         if (req.Party != -1 && req.Party != adv.Party)
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "party không khớp", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         if (!adv.Joinable)
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "advertisement không joinable", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         if (adv.AppBinaryChecksum != 0 && adv.AppBinaryChecksum != req.AppBinaryChecksum)
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "appBinaryChecksum không khớp", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         if (adv.DataChecksum != 0 && adv.DataChecksum != req.DataChecksum)
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "dataChecksum không khớp", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         if (!string.Equals(adv.ModDllFile, req.ModDllFile, StringComparison.OrdinalIgnoreCase) ||
@@ -209,7 +222,7 @@ public static class AdvertisementEndpoints
             !string.Equals(adv.ModVersion, req.ModVersion, StringComparison.OrdinalIgnoreCase) ||
             adv.VersionFlags != req.VersionFlags)
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "mod/version flags không khớp", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         var providedPassword = string.Empty;
@@ -221,7 +234,7 @@ public static class AdvertisementEndpoints
 
         if (adv.Passworded && !string.Equals(providedPassword, adv.Password, StringComparison.Ordinal))
         {
-            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
+            return JoinError(ctx, logger, "sai mật khẩu", GetBattleServerForAdvertisement(adv), req.Id);
         }
 
         var existingPeer = adv.Peers.FirstOrDefault(p => p.UserId == session.UserId);
@@ -624,6 +637,15 @@ public static class AdvertisementEndpoints
         };
     }
 
+    private static IResult JoinError(HttpContext ctx, ILogger<Program> logger, string reason,
+        BattleServerRuntimeInfo battleServer, int advertisementId)
+    {
+        logger.LogWarning("Route /game/advertisement/join từ chối request: {Reason}. AdvertisementId={AdvertisementId}",
+            reason, advertisementId);
+
+        return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, battleServer, Array.Empty<object>()));
+    }
+
     private static object[] EncodeAdvertisement(AdvertisementData advertisement)
     {
         return new object[]
@@ -694,21 +716,42 @@ public static class AdvertisementEndpoints
         return true;
     }
 
-    private static BattleServerRuntimeInfo ResolveBattleServer(string relayRegion, bool isLan)
+    private static bool TryResolveBattleServer(string relayRegion, bool isLan,
+        out BattleServerRuntimeInfo battleServer, out string error)
     {
         var gameId = GetCurrentGameId();
 
         if (isLan || BattleServerRuntime.IsLanRegion(relayRegion))
         {
-            return BattleServerRuntime.CreateLanBattleServer(gameId, relayRegion);
+            if (BattleServerRuntime.RequiresDedicatedBattleServer(gameId) && !BattleServerRuntime.HasReadyBattleServers(gameId))
+            {
+                battleServer = CreateDefaultBattleServer();
+                error = "BattleServer.exe chưa sẵn sàng";
+                return false;
+            }
+
+            battleServer = BattleServerRuntime.CreateLanBattleServer(gameId, relayRegion);
+            error = string.Empty;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(relayRegion))
+        {
+            battleServer = CreateDefaultBattleServer();
+            error = "relayRegion rỗng";
+            return false;
         }
 
         if (BattleServerRuntime.TryGetConfiguredBattleServer(gameId, relayRegion, out var configured))
         {
-            return configured;
+            battleServer = configured;
+            error = string.Empty;
+            return true;
         }
 
-        return CreateDefaultBattleServer();
+        battleServer = CreateDefaultBattleServer();
+        error = "không tìm thấy battle server cấu hình hợp lệ cho relayRegion";
+        return false;
     }
 
     private static BattleServerRuntimeInfo GetBattleServerForAdvertisement(AdvertisementData advertisement)

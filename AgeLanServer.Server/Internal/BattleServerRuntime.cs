@@ -25,6 +25,36 @@ internal static class BattleServerRuntime
         return !string.IsNullOrWhiteSpace(region) && Guid.TryParse(region, out _);
     }
 
+    public static bool RequiresDedicatedBattleServer(string gameId)
+    {
+        return gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology;
+    }
+
+    public static bool HasReadyBattleServers(string gameId)
+    {
+        return LoadConfiguredBattleServers(gameId).Count > 0;
+    }
+
+    public static async Task<bool> WaitForReadyBattleServersAsync(
+        string gameId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTime.UtcNow;
+
+        while (DateTime.UtcNow - startedAt < timeout)
+        {
+            if (HasReadyBattleServers(gameId))
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        return HasReadyBattleServers(gameId);
+    }
+
     public static bool TryGetConfiguredBattleServer(string gameId, string? region, out BattleServerRuntimeInfo server)
     {
         server = null!;
@@ -159,7 +189,7 @@ internal static class BattleServerRuntime
 
     private static List<BattleServerRuntimeInfo> LoadConfiguredBattleServers(string gameId)
     {
-        var configs = BattleServerConfigManager.LoadConfigs(gameId, onlyValid: false);
+        var configs = BattleServerConfigManager.LoadConfigs(gameId, onlyValid: true);
 
         return configs
             .Where(c => c.BsPort > 0 && c.WebSocketPort > 0)

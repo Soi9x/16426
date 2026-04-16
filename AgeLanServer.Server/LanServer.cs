@@ -89,6 +89,8 @@ public static class LanServer
         _currentGame = config.GameId;
         InitializeServerRuntime();
 
+        await EnsureBattleServerReadyAsync(_currentGame, ct);
+
         var builder = WebApplication.CreateBuilder();
 
         // Cấu hình HTTPS
@@ -125,6 +127,24 @@ public static class LanServer
                 await next();
             });
         }
+
+        _app.Use(async (context, next) =>
+        {
+            try
+            {
+                await next();
+
+                if (context.Response.StatusCode >= StatusCodes.Status500InternalServerError)
+                {
+                    AppLogger.Error($"Route lỗi ({context.Response.StatusCode}): {context.Request.Method} {context.Request.Path}{context.Request.QueryString}");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error($"Route exception: {context.Request.Method} {context.Request.Path}{context.Request.QueryString} -> {ex.Message}");
+                throw;
+            }
+        });
 
         _app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
         _app.UseWebSockets();
@@ -192,6 +212,31 @@ public static class LanServer
                 Version = "1.0"
             }
         };
+    }
+
+    private static async Task EnsureBattleServerReadyAsync(string gameId, CancellationToken ct)
+    {
+        if (!BattleServerRuntime.RequiresDedicatedBattleServer(gameId))
+        {
+            return;
+        }
+
+        if (BattleServerRuntime.HasReadyBattleServers(gameId))
+        {
+            AppLogger.Info("BattleServer.exe đã sẵn sàng.");
+            return;
+        }
+
+        AppLogger.Warn("Chưa phát hiện BattleServer.exe sẵn sàng. Chờ tối đa 30 giây...");
+        var ready = await BattleServerRuntime.WaitForReadyBattleServersAsync(gameId, TimeSpan.FromSeconds(30), ct);
+
+        if (!ready)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy BattleServer.exe khả dụng cho game hiện tại. Hãy khởi động battle-server-manager và đảm bảo BattleServer.exe sẵn sàng trước khi chạy server.");
+        }
+
+        AppLogger.Info("BattleServer.exe đã sẵn sàng.");
     }
 
     private static bool IsAnonymousGamePath(string path)
