@@ -24,12 +24,20 @@ public static class LeaderboardEndpoints
 
     public static void RegisterEndpoints(WebApplication app)
     {
+        var gameId = GetCurrentGameTitleStatic();
+
         // Route vá»›i chá»¯ L hoa (legacy)
         var legacyGroup = app.MapGroup("/game/Leaderboard");
 
         // Láº¥y lá»‹ch sá»­ match gáº§n Ä‘Ã¢y
-        legacyGroup.MapGet("/getRecentMatchHistory", HandleGetRecentMatchHistory);
-        legacyGroup.MapPost("/getRecentMatchHistory", HandleGetRecentMatchHistory);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            legacyGroup.MapPost("/getRecentMatchHistory", HandleGetRecentMatchHistory);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            legacyGroup.MapGet("/getRecentMatchHistory", HandleGetRecentMatchHistory);
+        }
 
         // Láº¥y leaderboard
         legacyGroup.MapGet("/getLeaderBoard", HandleGetLeaderBoard);
@@ -46,11 +54,17 @@ public static class LeaderboardEndpoints
         // Láº¥y party stat
         legacyGroup.MapGet("/getPartyStat", HandleGetPartyStat);
 
-        // Láº¥y avatar stat leaderboard (AoE3)
-        legacyGroup.MapGet("/getAvatarStatLeaderBoard", HandleGetAvatarStatLeaderBoard);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            // Láº¥y avatar stat leaderboard (AoE3)
+            legacyGroup.MapGet("/getAvatarStatLeaderBoard", HandleGetAvatarStatLeaderBoard);
+        }
 
-        // Láº¥y lá»‹ch sá»­ single player gáº§n Ä‘Ã¢y (AoE4)
-        legacyGroup.MapGet("/getRecentMatchSinglePlayerHistory", HandleGetRecentMatchSinglePlayerHistory);
+        if (gameId == GameIds.AgeOfEmpires4)
+        {
+            // Láº¥y lá»‹ch sá»­ single player gáº§n Ä‘Ã¢y (AoE4)
+            legacyGroup.MapGet("/getRecentMatchSinglePlayerHistory", HandleGetRecentMatchSinglePlayerHistory);
+        }
 
         // Route vá»›i chá»¯ l thÆ°á»ng
         var group = app.MapGroup("/game/leaderboard");

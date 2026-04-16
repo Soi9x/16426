@@ -253,3 +253,41 @@ Sau chỉnh sửa, flow dữ liệu presence và endpoint compatibility đã sá
 - Không phát hiện thêm mismatch nghiêm trọng ảnh hưởng trực tiếp flow online/offline.
 - Bổ sung hardening nhỏ ở `Account/setCrossplayEnabled`:
   - trả mã lỗi `2` nếu request không phải form content-type, tránh lỗi parse form trong trường hợp payload sai định dạng.
+
+---
+
+## 9) Rà soát end-to-end trước phát hành (đợt chốt)
+
+### 9.1 Siết parity điều kiện đăng ký route theo từng game
+Đã áp dụng lại điều kiện map route sát `router/game.go` của Go cho các nhóm:
+- `AccountEndpoints` (property routes chỉ cho age3/age4/athens)
+- `AutomatchEndpoints` (age4 dùng `/automatch`, game khác dùng `/automatch2`)
+- `ChallengeEndpoints` (phân tách GET/POST `getChallengeProgress`, `updateProgress`, `updateProgressBatched` theo game)
+- `ChatEndpoints` (method/path tách theo game: getChatChannels, join/leave/sendText/sendWhisper/sendWhispers/deleteOfflineMessage)
+- `CloudEndpoints` (`getFileURL` theo method/game; giữ `getTempCredentials`)
+- `CommunityEventEndpoints` (`getEventStats/getEventLeaderboard` chỉ age4/athens)
+- `ItemEndpoints` (route nâng cao chỉ bật cho non-age1)
+- `LeaderboardEndpoints` (`getRecentMatchHistory` method theo game, avatar/single-player route theo game)
+- `PartyEndpoints` (`createOrReportSinglePlayer` chỉ age4/athens)
+- `RelationshipEndpoints` (method `getRelationships` và route `setPresenceProperty`/`addfriend` theo game)
+- `AdvertisementEndpoints` (chuẩn hóa method/path condition cho find/getLan/tags/platform/start-stop observing/findObservable)
+
+### 9.2 Đồng bộ non-game additional routes theo Go
+- `AdditionalRouteRegistrar` đã điều kiện hóa:
+  - CDN status route không bật cho `age4` (đúng behavior Go)
+  - CloudFiles route chỉ bật cho `age2/age3`
+
+### 9.3 Bổ sung alias bind cho các schema Go đặc thù
+Đã thêm/siết alias trong `RouteDtos` cho các key có pattern khó map tự động:
+- `automatchPoll_id`
+- `isObservable`
+- `gatheringid`
+- `metaData`
+- `avatarStat_ids`
+- `recipientIDs`, `recipientID`
+- `targetProfileID`
+
+### 9.4 Kết luận readiness
+- Luồng trọng yếu (login/session/presence/relationship/websocket) + điều kiện route registration theo game đã sát Go hơn đáng kể.
+- Hệ route C# hiện liền mạch hơn với Go cho mục tiêu release LAN runtime.
+- Các endpoint còn simplified/stub (đã ghi ở các mục trước) không phải regression mới của đợt chốt này và có thể tách thành phase parity 1:1 tiếp theo.

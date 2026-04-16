@@ -31,29 +31,46 @@ public static class ChatEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/chat");
+        var gameId = GetCurrentGameTitleStatic();
 
         // Láº¥y danh sÃ¡ch chat channels
-        group.MapGet("/getChatChannels", HandleGetChatChannels);
-        group.MapPost("/getChatChannels", HandleGetChatChannels);
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/getChatChannels", HandleGetChatChannels);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapGet("/getChatChannels", HandleGetChatChannels);
+        }
 
         // Láº¥y tin nháº¯n offline
         group.MapGet("/getOfflineMessages", HandleGetOfflineMessages);
 
-        // Tham gia channel
-        group.MapPost("/joinChannel", HandleJoinChannel);
+        if (gameId == GameIds.AgeOfEmpires3)
+        {
+            // Tham gia channel
+            group.MapPost("/joinChannel", HandleJoinChannel);
 
-        // Rá»i channel
-        group.MapPost("/leaveChannel", HandleLeaveChannel);
+            // Rá»i channel
+            group.MapPost("/leaveChannel", HandleLeaveChannel);
 
-        // Gá»­i tin nháº¯n text trong channel
-        group.MapPost("/sendText", HandleSendText);
+            // Gá»­i tin nháº¯n text trong channel
+            group.MapPost("/sendText", HandleSendText);
 
-        // Gá»­i whisper (tin nháº¯n riÃªng)
-        group.MapPost("/sendWhisper", HandleSendWhisper);
-        group.MapPost("/sendWhispers", HandleSendWhisper);
+            // Gá»­i whisper (tin nháº¯n riÃªng)
+            group.MapPost("/sendWhisper", HandleSendWhisper);
+        }
+
+        if (gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapPost("/sendWhispers", HandleSendWhisper);
+        }
 
         // XÃ³a tin nháº¯n offline (AoM only)
-        group.MapPost("/deleteOfflineMessage", HandleDeleteOfflineMessage);
+        if (gameId == GameIds.AgeOfMythology)
+        {
+            group.MapPost("/deleteOfflineMessage", HandleDeleteOfflineMessage);
+        }
     }
 
     /// <summary>

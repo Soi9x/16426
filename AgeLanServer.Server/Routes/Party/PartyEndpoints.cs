@@ -2,6 +2,7 @@ using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.Login;
 using System.Collections.Concurrent;
 using System.Linq;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
@@ -21,6 +22,7 @@ public static class PartyEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/party");
+        var gameId = GetCurrentGameId();
 
         // ThÃªm peer vÃ o party
         group.MapPost("/peerAdd", HandlePeerAdd);
@@ -40,8 +42,11 @@ public static class PartyEndpoints
         // Cáº­p nháº­t host cá»§a party
         group.MapPost("/updateHost", HandleUpdateHost);
 
-        // Táº¡o hoáº·c bÃ¡o cÃ¡o single player (AoE4/AoM)
-        group.MapPost("/createOrReportSinglePlayer", HandleCreateOrReportSinglePlayer);
+        if (gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            // Táº¡o hoáº·c bÃ¡o cÃ¡o single player (AoE4/AoM)
+            group.MapPost("/createOrReportSinglePlayer", HandleCreateOrReportSinglePlayer);
+        }
     }
 
     /// <summary>
@@ -262,6 +267,11 @@ public static class PartyEndpoints
             return userId;
         }
         return 0;
+    }
+
+    private static string GetCurrentGameId()
+    {
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }
 

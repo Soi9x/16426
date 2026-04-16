@@ -21,12 +21,16 @@ public static class AutomatchEndpoints
 
     public static void RegisterEndpoints(WebApplication app)
     {
-        // AoE4 dùng /automatch, các game khác dùng /automatch2
-        var automatchGroup = app.MapGroup("/game/automatch");
-        var automatch2Group = app.MapGroup("/game/automatch2");
+        var gameId = GetCurrentGameTitleStatic();
 
-        // Lấy danh sách automatch maps
-        automatchGroup.MapGet("/getAutomatchMap", HandleGetAutomatchMap);
+        if (gameId == GameIds.AgeOfEmpires4)
+        {
+            var automatchGroup = app.MapGroup("/game/automatch");
+            automatchGroup.MapGet("/getAutomatchMap", HandleGetAutomatchMap);
+            return;
+        }
+
+        var automatch2Group = app.MapGroup("/game/automatch2");
         automatch2Group.MapGet("/getAutomatchMap", HandleGetAutomatchMap);
     }
 

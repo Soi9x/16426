@@ -21,15 +21,26 @@ public static class RelationshipEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/relationship");
+        var gameId = GetCurrentGameTitle();
 
-        group.MapGet("/getRelationships", HandleGetRelationships);
-        group.MapPost("/getRelationships", HandleGetRelationships);
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
+        {
+            group.MapPost("/getRelationships", HandleGetRelationships);
+        }
+        else if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapGet("/getRelationships", HandleGetRelationships);
+        }
 
         group.MapGet("/getPresenceData", HandleGetPresenceData);
         group.MapPost("/setPresence", HandleSetPresence);
-        group.MapPost("/setPresenceProperty", HandleSetPresenceProperty);
 
-        group.MapPost("/addfriend", HandleAddFriend);
+        if (gameId is GameIds.AgeOfEmpires3 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapPost("/setPresenceProperty", HandleSetPresenceProperty);
+            group.MapPost("/addfriend", HandleAddFriend);
+        }
+
         group.MapPost("/ignore", HandleIgnore);
         group.MapPost("/clearRelationship", HandleClearRelationship);
     }

@@ -47,10 +47,12 @@ public class AdvertisementBaseRequest
 public sealed class AdvertisementUpdateRequest : AdvertisementBaseRequest
 {
     public string Description { get; set; } = string.Empty;
+    [BindAlias("automatchPoll_id")]
     public int AutomatchPollId { get; set; }
     public string RelayRegion { get; set; } = string.Empty;
     public string MapName { get; set; } = string.Empty;
     public int HostId { get; set; }
+    [BindAlias("isObservable")]
     public bool Observable { get; set; }
     public uint ObserverDelay { get; set; }
     public string ObserverPassword { get; set; } = string.Empty;
@@ -72,10 +74,12 @@ public sealed class AdvertisementUpdateRequest : AdvertisementBaseRequest
 public sealed class AdvertisementHostRequest : AdvertisementBaseRequest
 {
     public string Description { get; set; } = string.Empty;
+    [BindAlias("automatchPoll_id")]
     public int AutomatchPollId { get; set; }
     public string RelayRegion { get; set; } = string.Empty;
     public string MapName { get; set; } = string.Empty;
     public int HostId { get; set; }
+    [BindAlias("isObservable")]
     public bool Observable { get; set; }
     public uint ObserverDelay { get; set; }
     public string ObserverPassword { get; set; } = string.Empty;
@@ -144,6 +148,7 @@ public sealed class PeerRequest
 /// </summary>
 public class InvitationRequest
 {
+    [BindAlias("gatheringid")]
     public int AdvertisementId { get; set; }
 }
 
@@ -168,7 +173,9 @@ public class TextRequest
 /// </summary>
 public sealed class WhisperRequest : TextRequest
 {
+    [BindAlias("recipientIDs")]
     public JsonArray<int> RecipientIds { get; set; } = new();
+    [BindAlias("recipientID")]
     public int RecipientId { get; set; }
 }
 
@@ -197,6 +204,7 @@ public sealed class SetPresencePropertyRequest
 /// </summary>
 public sealed class FriendRequest
 {
+    [BindAlias("targetProfileID")]
     public int TargetProfileId { get; set; }
 }
 
@@ -326,6 +334,7 @@ public sealed class AddProfilePropertyRequest : ProfilePropertiesRequest
 /// </summary>
 public sealed class SetAvatarMetadataRequest
 {
+    [BindAlias("metaData")]
     public string Metadata { get; set; } = string.Empty;
 }
 
@@ -356,6 +365,7 @@ public sealed class ReadSessionRequest
 /// </summary>
 public sealed class SetAvatarStatValuesRequest
 {
+    [BindAlias("avatarStat_ids")]
     public JsonArray<int> AvatarStatIds { get; set; } = new();
     public JsonArray<long> Values { get; set; } = new();
     public JsonArray<int> UpdateTypes { get; set; } = new();

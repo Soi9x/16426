@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Linq;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Login;
 using AgeLanServer.Server.Routes.Shared;
@@ -17,6 +18,7 @@ public static class AccountEndpoints
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/account");
+        var gameId = GetCurrentGameId();
 
         group.MapPost("/setLanguage", HandleSetLanguage);
         group.MapPost("/setCrossplayEnabled", HandleSetCrossplayEnabled);
@@ -26,9 +28,12 @@ public static class AccountEndpoints
         group.MapGet("/FindProfiles", HandleFindProfiles);
         group.MapGet("/getProfileName", HandleGetProfileName);
 
-        group.MapGet("/getProfileProperty", HandleGetProfileProperty);
-        group.MapPost("/addProfileProperty", HandleAddProfileProperty);
-        group.MapPost("/clearProfileProperty", HandleClearProfileProperty);
+        if (gameId is GameIds.AgeOfEmpires3 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            group.MapGet("/getProfileProperty", HandleGetProfileProperty);
+            group.MapPost("/addProfileProperty", HandleAddProfileProperty);
+            group.MapPost("/clearProfileProperty", HandleClearProfileProperty);
+        }
     }
 
     private static Task<IResult> HandleSetLanguage([FromServices] ILogger<Program> logger)
@@ -168,5 +173,10 @@ public static class AccountEndpoints
         }
 
         return Results.Ok(new object[] { 0 });
+    }
+
+    private static string GetCurrentGameId()
+    {
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }
