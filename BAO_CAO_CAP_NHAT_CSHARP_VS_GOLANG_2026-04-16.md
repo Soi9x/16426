@@ -186,3 +186,42 @@ Sau chỉnh sửa, flow dữ liệu presence và endpoint compatibility đã sá
 
 5. **Login battle server fallback**
    - khi chưa có battle server cấu hình, response vẫn có localhost fallback như Go.
+
+---
+
+## 8) Cập nhật tiếp theo (đợt rà soát bổ sung)
+
+### 8.1 Session/auth context cho game routes đã được nối vào pipeline
+- Đã thêm middleware runtime trong `LanServer` để:
+  - xác thực `sessionID` cho các `/game/*` route (trừ anonymous paths giống Go)
+  - set `HttpContext.Items["SessionId"|"UserId"|"UserName"|"ClientLibVersion"]`
+- Đây là điểm quan trọng để `setPresence`, `setPresenceProperty`, `readSession`, `logout` không còn chạy “mất session”.
+
+### 8.2 WebSocket đã nối đúng với message sender dùng bởi routes
+- Đã bật `UseWebSockets()` trong pipeline.
+- `WebSocketEndpoints` giờ dùng chung `WsMessageSender.HandleConnectionAsync(...)`.
+- Tránh tình trạng trước đây có 2 hệ quản lý connection tách biệt làm notify presence không tới client realtime.
+
+### 8.3 Login + Relationship đã được tăng parity gần Go
+- `platformlogin`:
+  - giữ user identity theo `platformUserID` (không tạo user hoàn toàn mới mỗi lần login cùng tài khoản)
+  - response shape bổ sung các trường profile gần hơn với Go
+  - nạp login key/value từ `resources/config/{game}/login.json`
+  - phát presence notify ngay sau login
+- `getRelationships`:
+  - dùng profile-info có kèm presence tương thích hơn
+  - phân nhánh friends/lastConnection theo game như Go
+- `setPresence` và `setPresenceProperty`:
+  - cập nhật trạng thái/thuộc tính đúng session
+  - broadcast `PresenceMessage` theo flow Go
+  - hỗ trợ remove presence property khi value rỗng
+
+### 8.4 Bind JSON đã hỗ trợ alias key như form/query
+- `HttpHelpers.BindAsync` (nhánh `application/json`) đã bind theo cùng bộ key linh hoạt:
+  - PascalCase / camelCase / snake_case / ID suffix
+  - alias qua `[BindAlias(...)]`
+- Giảm rủi ro payload JSON dùng key kiểu Go nhưng không map vào DTO C#.
+
+### 8.5 Đồng bộ runtime game id thêm cho nhiều route response loaders
+- Các route trước đó hardcode `age4` (achievement/automatch/challenge/item/leaderboard/chat/cloud/community event) đã fallback theo `ServerRuntime.CurrentGameId`.
+- Giảm sai lệch dữ liệu file responses/config khi chạy game khác `age4`.

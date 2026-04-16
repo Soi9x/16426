@@ -1,5 +1,6 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Login;
 using AgeLanServer.Server.Routes.Shared;
@@ -284,7 +285,7 @@ public static class ChatEndpoints
             // Lookup session tá»« LoginEndpoints.Sessions
             if (LoginEndpoints.Sessions.TryGetValue(sessionId, out var session))
             {
-                return session.ProfileId;
+                return session.UserId;
             }
         }
 
@@ -296,8 +297,7 @@ public static class ChatEndpoints
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
-        // Máº·c Ä‘á»‹nh dÃ¹ng age4, cÃ³ thá»ƒ thay Ä‘á»•i tá»« configuration
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }
 

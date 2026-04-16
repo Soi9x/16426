@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgeLanServer.Common;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -91,6 +92,6 @@ public static class ChallengeEndpoints
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 }

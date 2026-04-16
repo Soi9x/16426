@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Web;
 using AgeLanServer.Common;
-using AgeLanServer.Server.Routes.Shared;
+using AgeLanServer.Server.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -106,15 +106,13 @@ public static class CloudEndpoints
     /// </summary>
     private static string GetCurrentGameTitle(HttpContext ctx)
     {
-        // Lấy game title từ header hoặc query string
         if (ctx.Request.Headers.TryGetValue("X-Game-Title", out var headerTitle) &&
             !string.IsNullOrEmpty(headerTitle))
         {
             return headerTitle.ToString();
         }
 
-        // Mặc định dùng age4
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
     /// <summary>

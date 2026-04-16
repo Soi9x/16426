@@ -1,4 +1,4 @@
-﻿using AgeLanServer.Server.Routes.Shared;
+using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Common;
 using System.Text.Json;
 using AgeLanServer.Server.Internal;
@@ -255,7 +255,7 @@ public static class LeaderboardEndpoints
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
     // Kho lÆ°u trá»¯ avatar stats theo user ID
