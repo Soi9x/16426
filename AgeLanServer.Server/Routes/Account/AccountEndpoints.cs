@@ -38,6 +38,11 @@ public static class AccountEndpoints
 
     private static async Task<IResult> HandleSetCrossplayEnabled(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
+        if (!ctx.Request.HasFormContentType)
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         var form = await ctx.Request.ReadFormAsync();
         var enable = form["crossplayEnabled"].ToString();
         if (string.IsNullOrEmpty(enable))

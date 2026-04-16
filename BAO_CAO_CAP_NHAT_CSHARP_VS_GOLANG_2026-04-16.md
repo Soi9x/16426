@@ -247,3 +247,9 @@ Sau chỉnh sửa, flow dữ liệu presence và endpoint compatibility đã sá
   - `GET /cloudfiles/`
   - `GET /cloudfiles/{*path}`
 - Tăng khả năng tương thích pattern gọi từ client và tương đương Go route prefix handling.
+
+### 8.9 Quét cuối cùng (final pass)
+- Rà soát lại toàn bộ nhóm route gameplay và binding key theo schema Go.
+- Không phát hiện thêm mismatch nghiêm trọng ảnh hưởng trực tiếp flow online/offline.
+- Bổ sung hardening nhỏ ở `Account/setCrossplayEnabled`:
+  - trả mã lỗi `2` nếu request không phải form content-type, tránh lỗi parse form trong trường hợp payload sai định dạng.
