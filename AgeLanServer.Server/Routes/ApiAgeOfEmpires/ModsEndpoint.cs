@@ -8,11 +8,8 @@ public static class ModsEndpoint
     public static void RegisterEndpoints(IEndpointRouteBuilder app)
     {
         app.MapPost("/api/v4/Mods/My", HandleEmptyMods);
-        app.MapPost("/api/v4/Mods/My/", HandleEmptyMods);
         app.MapPost("/api/v4/Mods/Installed", HandleEmptyMods);
-        app.MapPost("/api/v4/Mods/Installed/", HandleEmptyMods);
         app.MapPost("/api/v4/Mods/Find", HandleEmptyMods);
-        app.MapPost("/api/v4/Mods/Find/", HandleEmptyMods);
     }
 
     private static IResult HandleEmptyMods()
