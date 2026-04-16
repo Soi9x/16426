@@ -1,4 +1,5 @@
 using AgeLanServer.Server.Routes.Account;
+using AgeLanServer.Server.Routes.AccountManagement;
 using AgeLanServer.Server.Routes.Achievement;
 using AgeLanServer.Server.Routes.Advertisement;
 using AgeLanServer.Server.Routes.Automatch;
@@ -69,6 +70,7 @@ public static class RouteRegistrar
 
         // === Account endpoints ===
         AccountEndpoints.RegisterEndpoints(app);
+        AccountManagementEndpoints.RegisterEndpoints(app);
 
         // Account property endpoints chỉ có trong AoE3/AoE4/AoM
 

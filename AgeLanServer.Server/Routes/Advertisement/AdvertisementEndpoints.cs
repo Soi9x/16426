@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
+using AgeLanServer.Server.Routes.Login;
 using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
@@ -11,34 +11,26 @@ using Microsoft.Extensions.Logging;
 
 namespace AgeLanServer.Server.Routes.Advertisement;
 
-/// <summary>
-/// Đăng ký các endpoint quản lý advertisement (lobby) trên mạng LAN.
-/// Bao gồm: host, join, leave, update, find, search, tags, observing.
-/// </summary>
 public static class AdvertisementEndpoints
 {
-    // Kho lưu trữ advertisements trong bộ nhớ
     private static readonly ConcurrentDictionary<int, AdvertisementData> Advertisements = new();
-    private static int _nextId = 1;
+    private static int _nextId;
+
+    private const string BattleServerIp = "127.0.0.1";
+    private const int BattleServerPort = 27012;
+    private const int BattleServerWebSocketPort = 27112;
+    private const int BattleServerOutOfBandPort = 27212;
 
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/advertisement");
         var gameId = GetCurrentGameId();
 
-        // Tạo lobby mới
         group.MapPost("/host", HandleHost);
-
-        // Tham gia lobby
         group.MapPost("/join", HandleJoin);
-
-        // Rời lobby
         group.MapPost("/leave", HandleLeave);
-
-        // Cập nhật lobby
         group.MapPost("/update", HandleUpdate);
 
-        // Tìm kiếm advertisements (POST hoặc GET tùy game)
         if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
         {
             group.MapPost("/findAdvertisements", HandleFindAdvertisements);
@@ -48,10 +40,8 @@ public static class AdvertisementEndpoints
             group.MapGet("/findAdvertisements", HandleFindAdvertisements);
         }
 
-        // Lấy danh sách advertisements theo match IDs
         group.MapGet("/getAdvertisements", HandleGetAdvertisements);
 
-        // Lấy danh sách LAN advertisements
         if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
         {
             group.MapPost("/getLanAdvertisements", HandleGetLanAdvertisements);
@@ -61,36 +51,25 @@ public static class AdvertisementEndpoints
             group.MapGet("/getLanAdvertisements", HandleGetLanAdvertisements);
         }
 
-        // Cập nhật tags
         if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
         {
             group.MapPost("/updateTags", HandleUpdateTags);
-        }
-
-        // Cập nhật platform session ID
-        if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
-        {
             group.MapPost("/updatePlatformSessionID", HandleUpdatePlatformSessionId);
         }
 
-        // Cập nhật platform lobby ID
         if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3)
         {
             group.MapPost("/updatePlatformLobbyID", HandleUpdatePlatformLobbyId);
         }
 
-        // Bắt đầu quan sát
         if (gameId is GameIds.AgeOfEmpires2 or GameIds.AgeOfEmpires3 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
         {
             group.MapPost("/startObserving", HandleStartObserving);
-            // Dừng quan sát
             group.MapPost("/stopObserving", HandleStopObserving);
         }
 
-        // Cập nhật trạng thái
         group.MapPost("/updateState", HandleUpdateState);
 
-        // Tìm advertisements có thể quan sát
         if (gameId == GameIds.AgeOfEmpires3)
         {
             group.MapPost("/findObservableAdvertisements", HandleFindObservableAdvertisements);
@@ -101,176 +80,266 @@ public static class AdvertisementEndpoints
         }
     }
 
-    /// <summary>
-    /// Xử lý tạo lobby mới (host).
-    /// </summary>
     private static async Task<IResult> HandleHost(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementHostRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
+        {
+            return Results.Ok(EncodeHostErrorResponse());
+        }
 
-        // Tạo advertisement mới với battle server
+        if (req.Id != 0 && req.Id != -1)
+        {
+            return Results.Ok(EncodeHostErrorResponse());
+        }
+
         var id = Interlocked.Increment(ref _nextId);
-        var adv = new AdvertisementData
+        var hostPeer = new PeerData
+        {
+            UserId = req.HostId,
+            StatId = session.StatId,
+            Party = req.Party,
+            Race = req.Race,
+            Team = req.Team,
+        };
+
+        var advertisement = new AdvertisementData
         {
             Id = id,
             Description = req.Description,
             MapName = req.MapName,
             HostId = req.HostId,
-            MaxPlayers = req.MaxPlayers,
+            MaxPlayers = req.MaxPlayers > 0 ? req.MaxPlayers : (byte)8,
             MatchType = req.MatchType,
             Passworded = req.Passworded,
+            Password = req.Password,
             Visible = req.Visible,
-            Joinable = true,
+            Joinable = req.Joinable,
             Observable = req.Observable,
             ObserverDelay = req.ObserverDelay,
+            ObserverPassword = req.ObserverPassword,
             State = req.State,
-            Peers = new List<PeerData>(),
-            Observers = new List<int>(),
-            CreatedAt = DateTime.UtcNow
+            RelayRegion = req.RelayRegion,
+            AppBinaryChecksum = req.AppBinaryChecksum,
+            DataChecksum = req.DataChecksum,
+            ModDllFile = req.ModDllFile,
+            ModDllChecksum = req.ModDllChecksum,
+            ModName = req.ModName,
+            ModVersion = req.ModVersion,
+            VersionFlags = req.VersionFlags,
+            PlatformSessionId = req.PsnSessionId,
+            Options = req.Options,
+            SlotInfo = req.SlotInfo,
+            IsLan = req.ServiceType != 0,
+            XboxSessionId = "0",
+            CreatedAt = DateTime.UtcNow,
+            AdvertisementIp = $"/10.0.11.{(id % 254) + 1}",
+            Observers = new List<int>()
         };
 
-        Advertisements[id] = adv;
+        hostPeer.Ip = advertisement.AdvertisementIp;
+        advertisement.Peers = new List<PeerData> { hostPeer };
+
+        Advertisements[id] = advertisement;
 
         logger.LogInformation("Advertisement created: ID={Id}, Description={Desc}", id, req.Description);
-        return Results.Ok(new object[] { 0, id.ToString(), "authtoken" });
+        return Results.Ok(EncodeHostResponse(advertisement));
     }
 
-    /// <summary>
-    /// Xử lý tham gia lobby.
-    /// </summary>
     private static async Task<IResult> HandleJoin(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementBaseRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
+        {
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+        }
 
         if (!Advertisements.TryGetValue(req.Id, out var adv))
         {
-            return Results.Ok(new object[] { 1 }); // Advertisement không tồn tại
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
         }
 
-        // Kiểm tra password
+        if (!adv.Joinable)
+        {
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+        }
+
+        if (adv.AppBinaryChecksum != 0 && adv.AppBinaryChecksum != req.AppBinaryChecksum)
+        {
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+        }
+
+        if (adv.DataChecksum != 0 && adv.DataChecksum != req.DataChecksum)
+        {
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+        }
+
+        if (!string.Equals(adv.ModDllFile, req.ModDllFile, StringComparison.OrdinalIgnoreCase) ||
+            adv.ModDllChecksum != req.ModDllChecksum ||
+            !string.Equals(adv.ModName, req.ModName, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(adv.ModVersion, req.ModVersion, StringComparison.OrdinalIgnoreCase) ||
+            adv.VersionFlags != req.VersionFlags)
+        {
+            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+        }
+
         if (adv.Passworded)
         {
-            var reqPassword = ctx.Request.Headers["X-Password"].FirstOrDefault() ?? string.Empty;
-            if (string.IsNullOrEmpty(reqPassword) || reqPassword != adv.Password)
+            var providedPassword = string.Empty;
+            if (ctx.Request.HasFormContentType)
             {
-                return Results.Ok(new object[] { 5 }); // Sai password
+                var form = await ctx.Request.ReadFormAsync();
+                providedPassword = form["password"].ToString();
+            }
+
+            if (!string.Equals(providedPassword, adv.Password, StringComparison.Ordinal))
+            {
+                return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
             }
         }
 
-        // Kiểm tra joinable
-        if (!adv.Joinable)
+        var existingPeer = adv.Peers.FirstOrDefault(p => p.UserId == session.UserId);
+        if (existingPeer is null)
         {
-            return Results.Ok(new object[] { 3 }); // Lobby không cho phép join
+            existingPeer = new PeerData
+            {
+                UserId = session.UserId,
+                StatId = session.StatId,
+                Party = req.Party,
+                Race = req.Race,
+                Team = req.Team,
+                Ip = adv.AdvertisementIp
+            };
+            adv.Peers.Add(existingPeer);
+        }
+        else
+        {
+            existingPeer.Party = req.Party;
+            existingPeer.Race = req.Race;
+            existingPeer.Team = req.Team;
+            existingPeer.Ip = adv.AdvertisementIp;
         }
 
-        // Thêm peer vào danh sách
-        var peer = new PeerData
-        {
-            ProfileId = req.Party,
-            Race = req.Race,
-            Team = req.Team
-        };
-        adv.Peers.Add(peer);
-
-        return Results.Ok(new object[] { 0, "127.0.0.1", "127.0.0.1" });
+        return Results.Ok(EncodeJoinResponse(0, adv.AdvertisementIp, EncodePeer(adv.Id, existingPeer)));
     }
 
-    /// <summary>
-    /// Xử lý rời lobby.
-    /// </summary>
     private static async Task<IResult> HandleLeave(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementIdRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-
-        if (Advertisements.TryGetValue(req.AdvertisementId, out var adv))
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
         {
-            // Xóa peer khỏi advertisement (dựa trên session)
-            var userId = ctx.Items["UserId"] as int? ?? 0;
-            adv.Peers.RemoveAll(p => p.ProfileId == userId);
+            return Results.Ok(new object[] { 2 });
         }
+
+        if (!Advertisements.TryGetValue(req.AdvertisementId, out var adv))
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
+        adv.Peers.RemoveAll(p => p.UserId == session.UserId);
+        if (adv.Peers.Count == 0)
+        {
+            Advertisements.TryRemove(req.AdvertisementId, out _);
+        }
+
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý cập nhật thông tin lobby.
-    /// </summary>
     private static async Task<IResult> HandleUpdate(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementUpdateRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>() });
+        }
 
         if (!Advertisements.TryGetValue(req.Id, out var adv))
         {
-            return Results.Ok(new object[] { 1 });
+            return Results.Ok(new object[] { 2, Array.Empty<object>() });
         }
 
-        // Cập nhật thông tin advertisement
         adv.Description = req.Description;
         adv.MapName = req.MapName;
         adv.MaxPlayers = req.MaxPlayers;
         adv.Passworded = req.Passworded;
+        adv.Password = req.Password;
         adv.Visible = req.Visible;
         adv.Joinable = req.Joinable;
         adv.Observable = req.Observable;
+        adv.ObserverDelay = req.ObserverDelay;
+        adv.ObserverPassword = req.ObserverPassword;
         adv.State = req.State;
+        adv.MatchType = req.MatchType;
+        adv.Options = req.Options;
+        adv.SlotInfo = req.SlotInfo;
+        adv.AppBinaryChecksum = req.AppBinaryChecksum;
+        adv.DataChecksum = req.DataChecksum;
+        adv.ModDllFile = req.ModDllFile;
+        adv.ModDllChecksum = req.ModDllChecksum;
+        adv.ModName = req.ModName;
+        adv.ModVersion = req.ModVersion;
+        adv.VersionFlags = req.VersionFlags;
+        adv.PlatformSessionId = req.PsnSessionId;
 
-        return Results.Ok(new object[] { 0 });
+        if (adv.State == 1 && adv.StartTime is null)
+        {
+            adv.StartTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            adv.Visible = false;
+            adv.Joinable = false;
+        }
+
+        return Results.Ok(new object[] { 0, EncodeAdvertisement(adv) });
     }
 
-    /// <summary>
-    /// Xử lý tìm kiếm advertisements.
-    /// </summary>
-    private static async Task<IResult> HandleFindAdvertisements(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleFindAdvertisements(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var query = new WanQuery();
         var search = new SearchQuery();
         await HttpHelpers.BindAsync(ctx.Request, query);
         await HttpHelpers.BindAsync(ctx.Request, search);
 
-        var allAds = Advertisements.Values
+        var filtered = Advertisements.Values
             .Where(a => a.Visible)
+            .Where(a => search.AppBinaryChecksum == 0 || a.AppBinaryChecksum == search.AppBinaryChecksum)
+            .Where(a => search.DataChecksum == 0 || a.DataChecksum == search.DataChecksum)
+            .Where(a => search.MatchType is null || a.MatchType == search.MatchType)
+            .Where(a => string.IsNullOrEmpty(search.ModDllFile) || a.ModDllFile == search.ModDllFile)
+            .Where(a => search.ModDllChecksum == 0 || a.ModDllChecksum == search.ModDllChecksum)
+            .Where(a => string.IsNullOrEmpty(search.ModName) || a.ModName == search.ModName)
+            .Where(a => string.IsNullOrEmpty(search.ModVersion) || a.ModVersion == search.ModVersion)
+            .Where(a => search.VersionFlags == 0 || a.VersionFlags == search.VersionFlags)
             .ToList();
 
-        // Áp dụng phân trang
-        var offset = query.Offset;
-        var length = query.Length > 0 ? query.Length : allAds.Count;
-        var page = allAds.Skip(offset).Take(length).ToList();
+        var offset = Math.Max(0, query.Offset);
+        var length = query.Length > 0 ? query.Length : filtered.Count;
+        var page = filtered.Skip(offset).Take(length).ToList();
+        var encoded = page.Select(EncodeAdvertisement).ToArray();
 
-        var encodedAds = page.Select(a => EncodeAdvertisement(a)).ToList();
-
-        return Results.Ok(new object[] { 0, encodedAds.ToArray(), Array.Empty<object>() });
+        return Results.Ok(new object[] { 0, encoded, Array.Empty<object>() });
     }
 
-    /// <summary>
-    /// Xử lý lấy danh sách advertisements theo match IDs.
-    /// </summary>
-    private static async Task<IResult> HandleGetAdvertisements(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleGetAdvertisements(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new GetMatchIdsRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-
-        var result = new List<object>();
-        foreach (var matchId in req.MatchIds.Data)
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
         {
-            if (Advertisements.TryGetValue(matchId, out var adv))
-            {
-                result.Add(EncodeAdvertisement(adv));
-            }
+            return Results.Ok(new object[] { 2, Array.Empty<object>() });
         }
 
-        return Results.Ok(new object[] { 0, result.ToArray() });
+        var result = req.MatchIds.Data
+            .Select(matchId => Advertisements.TryGetValue(matchId, out var adv) ? EncodeAdvertisement(adv) : null)
+            .Where(adv => adv is not null)
+            .ToArray();
+
+        return Results.Ok(new object[] { 0, result });
     }
 
-    /// <summary>
-    /// Xử lý lấy danh sách LAN advertisements theo relay regions.
-    /// </summary>
-    private static async Task<IResult> HandleGetLanAdvertisements(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleGetLanAdvertisements(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var query = new LanQuery();
         await HttpHelpers.BindAsync(ctx.Request, query);
@@ -280,28 +349,21 @@ public static class AdvertisementEndpoints
             return Results.Ok(new object[] { 0, Array.Empty<object>(), Array.Empty<object>() });
         }
 
-        // Lọc advertisements theo LAN server GUIDs
-        // Hiện tại trả về tất cả advertisements có sẵn
-        var allAds = Advertisements.Values
+        var ads = Advertisements.Values
             .Where(a => a.Visible)
-            .Select(a => EncodeAdvertisement(a))
+            .Select(EncodeAdvertisement)
             .ToArray();
 
-        return Results.Ok(new object[] { 0, allAds, Array.Empty<object>() });
+        return Results.Ok(new object[] { 0, ads, Array.Empty<object>() });
     }
 
-    /// <summary>
-    /// Xử lý cập nhật tags cho advertisement.
-    /// </summary>
-    private static async Task<IResult> HandleUpdateTags(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleUpdateTags(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var idReq = new AdvertisementIdRequest();
         var tagReq = new TagRequest();
         await HttpHelpers.BindAsync(ctx.Request, idReq);
         await HttpHelpers.BindAsync(ctx.Request, tagReq);
 
-        // Kiểm tra độ dài mảng phải khớp
         if (tagReq.StringTagNames.Data.Count != tagReq.StringTagValues.Data.Count ||
             tagReq.NumericTagNames.Data.Count != tagReq.NumericTagValues.Data.Count)
         {
@@ -313,13 +375,11 @@ public static class AdvertisementEndpoints
             return Results.Ok(new object[] { 1 });
         }
 
-        // Cập nhật string tags
         for (int i = 0; i < tagReq.StringTagNames.Data.Count; i++)
         {
             adv.StringTags[tagReq.StringTagNames.Data[i]] = tagReq.StringTagValues.Data[i];
         }
 
-        // Cập nhật numeric tags
         for (int i = 0; i < tagReq.NumericTagNames.Data.Count; i++)
         {
             adv.NumericTags[tagReq.NumericTagNames.Data[i]] = tagReq.NumericTagValues.Data[i];
@@ -328,45 +388,39 @@ public static class AdvertisementEndpoints
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý cập nhật platform session ID.
-    /// </summary>
-    private static async Task<IResult> HandleUpdatePlatformSessionId(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleUpdatePlatformSessionId(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new PlatformIdRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
 
-        // Gửi thông báo PlatformSessionUpdateMessage qua WebSocket tới các peers
+        if (Advertisements.TryGetValue(req.MatchId, out var adv) && ctx.Request.HasFormContentType)
+        {
+            var form = await ctx.Request.ReadFormAsync();
+            var platformSession = form["platformSessionID"].ToString();
+            if (ulong.TryParse(platformSession, out var parsed))
+            {
+                adv.PlatformSessionId = parsed;
+            }
+        }
+
         var sessionId = ctx.Items["SessionId"] as string ?? string.Empty;
-        var message = new { matchId = req.MatchId };
-        await WsMessageSender.SendOrStoreMessageAsync(sessionId, "PlatformSessionUpdate", message);
+        await WsMessageSender.SendOrStoreMessageAsync(sessionId, "PlatformSessionUpdate", new { matchId = req.MatchId });
+
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý cập nhật platform lobby ID.
-    /// </summary>
-    private static async Task<IResult> HandleUpdatePlatformLobbyId(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleUpdatePlatformLobbyId(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new PlatformIdRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
 
-        // Tương tự UpdatePlatformSessionId nhưng với key "platformlobbyID"
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý bắt đầu quan sát match.
-    /// </summary>
-    private static async Task<IResult> HandleStartObserving(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleStartObserving(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementIdRequest();
-        var search = new SearchQuery();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        await HttpHelpers.BindAsync(ctx.Request, search);
 
         if (!Advertisements.TryGetValue(req.AdvertisementId, out var adv))
         {
@@ -375,38 +429,33 @@ public static class AdvertisementEndpoints
 
         if (!adv.Observable)
         {
-            return Results.Ok(new object[] { 4 }); // Không cho phép quan sát
+            return Results.Ok(new object[] { 4 });
         }
 
-        // Thêm userId vào danh sách observers
         var userId = ctx.Items["UserId"] as int? ?? 0;
-        adv.Observers.Add(userId);
-        return Results.Ok(new object[] { 0, "127.0.0.1" });
+        if (!adv.Observers.Contains(userId))
+        {
+            adv.Observers.Add(userId);
+        }
+
+        return Results.Ok(new object[] { 0, BattleServerIp });
     }
 
-    /// <summary>
-    /// Xử lý dừng quan sát match.
-    /// </summary>
-    private static async Task<IResult> HandleStopObserving(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleStopObserving(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementIdRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
 
         if (Advertisements.TryGetValue(req.AdvertisementId, out var adv))
         {
-            // Xóa userId khỏi danh sách observers
             var userId = ctx.Items["UserId"] as int? ?? 0;
             adv.Observers.Remove(userId);
         }
+
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý cập nhật trạng thái advertisement.
-    /// </summary>
-    private static async Task<IResult> HandleUpdateState(HttpContext ctx,
-        [FromServices] ILogger<Program> logger)
+    private static async Task<IResult> HandleUpdateState(HttpContext ctx, [FromServices] ILogger<Program> logger)
     {
         var req = new AdvertisementIdRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
@@ -416,69 +465,159 @@ public static class AdvertisementEndpoints
             return Results.Ok(new object[] { 1 });
         }
 
-        // Lấy state từ request body (sử dụng AdvertisementUpdateRequest để có đầy đủ trường)
-        // Trong trường hợp này, state đã được set từ query parameter hoặc default
-        adv.State = 1; // Default state
+        if (ctx.Request.HasFormContentType)
+        {
+            var form = await ctx.Request.ReadFormAsync();
+            var state = form["state"].ToString();
+            if (sbyte.TryParse(state, out var parsedState))
+            {
+                adv.State = parsedState;
+            }
+        }
+
+        if (adv.State == 1 && adv.StartTime is null)
+        {
+            adv.StartTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            adv.Visible = false;
+            adv.Joinable = false;
+        }
 
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xử lý tìm advertisements có thể quan sát.
-    /// </summary>
     private static async Task<IResult> HandleFindObservableAdvertisements(HttpContext ctx,
         [FromServices] ILogger<Program> logger)
     {
         var query = new WanQuery();
-        var search = new SearchQuery();
         await HttpHelpers.BindAsync(ctx.Request, query);
-        await HttpHelpers.BindAsync(ctx.Request, search);
 
         var observableAds = Advertisements.Values
             .Where(a => a.Visible && a.Observable)
             .ToList();
 
-        var offset = query.Offset;
+        var offset = Math.Max(0, query.Offset);
         var length = query.Length > 0 ? query.Length : observableAds.Count;
         var page = observableAds.Skip(offset).Take(length).ToList();
 
-        var encodedAds = page.Select(a => EncodeAdvertisement(a)).ToList();
+        var encodedAds = page.Select(EncodeAdvertisement).ToArray();
 
-        return Results.Ok(new object[] { 0, encodedAds.ToArray(), Array.Empty<object>() });
+        return Results.Ok(new object[] { 0, encodedAds, Array.Empty<object>() });
     }
 
-    /// <summary>
-    /// Mã hóa advertisement thành object để trả về.
-    /// </summary>
-    private static object[] EncodeAdvertisement(AdvertisementData adv)
+    private static object[] EncodeHostErrorResponse()
     {
         return new object[]
         {
-            adv.Id,                       // 0: ID
-            adv.Description,              // 1: Description
-            adv.MapName,                  // 2: Map name
-            adv.HostId,                   // 3: Host ID
-            adv.MaxPlayers,               // 4: Max players
-            adv.Peers.Count,              // 5: Current players
-            adv.Passworded ? 1 : 0,       // 6: Passworded
-            adv.Visible ? 1 : 0,          // 7: Visible
-            adv.Joinable ? 1 : 0,         // 8: Joinable
-            adv.MatchType,                // 9: Match type
-            adv.State,                    // 10: State
-            adv.Observable ? 1 : 0,       // 11: Observable
-            new DateTimeOffset(adv.CreatedAt).ToUnixTimeSeconds() // 12: Created time
+            2,
+            0,
+            "authtoken",
+            BattleServerIp,
+            BattleServerPort,
+            BattleServerWebSocketPort,
+            BattleServerOutOfBandPort,
+            string.Empty,
+            Array.Empty<object>(),
+            0,
+            0,
+            null!,
+            null!,
+            "0",
+            string.Empty
+        };
+    }
+
+    private static object[] EncodeHostResponse(AdvertisementData advertisement)
+    {
+        return new object[]
+        {
+            0,
+            advertisement.Id,
+            "authtoken",
+            BattleServerIp,
+            BattleServerPort,
+            BattleServerWebSocketPort,
+            BattleServerOutOfBandPort,
+            advertisement.RelayRegion,
+            advertisement.Peers.Select(p => EncodePeer(advertisement.Id, p)).ToArray(),
+            0,
+            0,
+            null!,
+            null!,
+            advertisement.XboxSessionId,
+            advertisement.Description
+        };
+    }
+
+    private static object[] EncodeJoinResponse(int errorCode, string advertisementIp, object[] peerEncoded)
+    {
+        return new object[]
+        {
+            errorCode,
+            advertisementIp,
+            BattleServerIp,
+            BattleServerPort,
+            BattleServerWebSocketPort,
+            BattleServerOutOfBandPort,
+            new[] { peerEncoded }
+        };
+    }
+
+    private static object[] EncodeAdvertisement(AdvertisementData advertisement)
+    {
+        return new object[]
+        {
+            advertisement.Id,
+            advertisement.PlatformSessionId,
+            0,
+            string.Empty,
+            string.Empty,
+            advertisement.XboxSessionId,
+            advertisement.HostId,
+            advertisement.State,
+            advertisement.Description,
+            advertisement.Description,
+            advertisement.Visible ? 1 : 0,
+            advertisement.MapName,
+            advertisement.Options,
+            advertisement.Passworded ? 1 : 0,
+            advertisement.MaxPlayers,
+            advertisement.SlotInfo,
+            advertisement.MatchType,
+            advertisement.Peers.Select(p => EncodePeer(advertisement.Id, p)).ToArray(),
+            advertisement.Observers.Count,
+            0,
+            advertisement.Observable ? 1 : 0,
+            advertisement.ObserverDelay,
+            string.IsNullOrEmpty(advertisement.ObserverPassword) ? 0 : 1,
+            advertisement.IsLan ? 1 : 0,
+            advertisement.StartTime,
+            advertisement.RelayRegion,
+            advertisement.IsLan ? null! : "localhost"
+        };
+    }
+
+    private static object[] EncodePeer(int advertisementId, PeerData peer)
+    {
+        return new object[]
+        {
+            advertisementId,
+            peer.UserId,
+            -1,
+            peer.StatId,
+            peer.Race,
+            peer.Team,
+            peer.Ip
         };
     }
 
     private static string GetCurrentGameId()
     {
-        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId)
+            ? GameIds.AgeOfEmpires4
+            : ServerRuntime.CurrentGameId;
     }
 }
 
-/// <summary>
-/// Dữ liệu advertisement trong bộ nhớ.
-/// </summary>
 internal sealed class AdvertisementData
 {
     public int Id { get; set; }
@@ -492,45 +631,55 @@ internal sealed class AdvertisementData
     public bool Joinable { get; set; }
     public bool Observable { get; set; }
     public uint ObserverDelay { get; set; }
+    public string ObserverPassword { get; set; } = string.Empty;
     public sbyte State { get; set; }
     public byte MatchType { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string RelayRegion { get; set; } = string.Empty;
+    public int AppBinaryChecksum { get; set; }
+    public int DataChecksum { get; set; }
+    public string ModDllFile { get; set; } = string.Empty;
+    public int ModDllChecksum { get; set; }
+    public string ModName { get; set; } = string.Empty;
+    public string ModVersion { get; set; } = string.Empty;
+    public uint VersionFlags { get; set; }
+    public ulong PlatformSessionId { get; set; }
+    public string Options { get; set; } = string.Empty;
+    public string SlotInfo { get; set; } = string.Empty;
+    public bool IsLan { get; set; }
+    public string XboxSessionId { get; set; } = "0";
+    public string AdvertisementIp { get; set; } = "/10.0.11.1";
+    public long? StartTime { get; set; }
     public List<PeerData> Peers { get; set; } = new();
     public List<int> Observers { get; set; } = new();
     public Dictionary<string, string> StringTags { get; set; } = new();
     public Dictionary<string, int> NumericTags { get; set; } = new();
 }
 
-/// <summary>
-/// Dữ liệu peer trong advertisement.
-/// </summary>
 internal sealed class PeerData
 {
-    public int ProfileId { get; set; }
+    public int UserId { get; set; }
+    public int StatId { get; set; }
+    public int Party { get; set; }
     public int Race { get; set; }
     public int Team { get; set; }
+    public string Ip { get; set; } = "/10.0.11.1";
 }
 
-/// <summary>
-/// DTO cho danh sách match IDs.
-/// </summary>
 public sealed class GetMatchIdsRequest
 {
+    [BindAlias("match_ids")]
     public JsonArray<int> MatchIds { get; set; } = new();
 }
 
-/// <summary>
-/// DTO cho LAN query.
-/// </summary>
 public sealed class LanQuery
 {
+    [BindAlias("lanServerGuids")]
     public string LanServerGuids { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// DTO cho platform ID request.
-/// </summary>
 public sealed class PlatformIdRequest
 {
+    [BindAlias("matchid")]
     public int MatchId { get; set; }
 }

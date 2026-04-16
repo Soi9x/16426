@@ -7,6 +7,7 @@ using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.ApiAgeOfEmpires;
 using AgeLanServer.Server.Routes.CdnAgeOfEmpires;
 using AgeLanServer.Server.Routes.CloudFiles;
+using AgeLanServer.Server.Routes.Playfab;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
@@ -32,6 +33,18 @@ public static class AdditionalRouteRegistrar
 
         // Kiểm duyệt văn bản (text moderation) cho AoE
         TextModerationEndpoint.RegisterEndpoint(app);
+
+        // API modding cho AoE4
+        if (gameId == GameIds.AgeOfEmpires4)
+        {
+            ModsEndpoint.RegisterEndpoints(app);
+        }
+
+        // PlayFab API cho AoE4/AoM
+        if (gameId is GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology)
+        {
+            PlayfabEndpoints.RegisterEndpoints(app);
+        }
 
         // Trạng thái server CDN AoE (Go không bật cho age4)
         if (gameId != GameIds.AgeOfEmpires4)
