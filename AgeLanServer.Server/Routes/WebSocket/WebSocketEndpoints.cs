@@ -6,8 +6,17 @@ public static class WebSocketEndpoints
 {
     public static void RegisterEndpoints(WebApplication app)
     {
-        app.MapGet("/wss", HandleWebSocket);
-        app.MapGet("/wss/", HandleWebSocket);
+        app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path.Value ?? string.Empty;
+            if (path.Equals("/wss", StringComparison.OrdinalIgnoreCase) ||
+                path.Equals("/wss/", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleWebSocket(context);
+                return;
+            }
+            await next();
+        });
     }
 
     private static async Task HandleWebSocket(HttpContext ctx)
