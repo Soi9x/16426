@@ -1,5 +1,5 @@
 using System.Windows;
-using AgeLanServer.WpfConfigManager.Models;
+using WpfThemeMode = AgeLanServer.WpfConfigManager.Models.ThemeMode;
 
 namespace AgeLanServer.WpfConfigManager;
 
@@ -7,9 +7,9 @@ public partial class App : Application
 {
     private const int ThemeDictionaryIndex = 1;
 
-    public void ApplyTheme(ThemeMode theme)
+    public void ApplyTheme(WpfThemeMode theme)
     {
-        var dictionaryPath = theme == ThemeMode.Dark
+        var dictionaryPath = theme == WpfThemeMode.Dark
             ? "Themes/DarkTheme.xaml"
             : "Themes/LightTheme.xaml";
 

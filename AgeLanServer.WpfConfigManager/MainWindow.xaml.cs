@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
-using AgeLanServer.WpfConfigManager.Models;
 using AgeLanServer.WpfConfigManager.ViewModels;
+using WpfThemeMode = AgeLanServer.WpfConfigManager.Models.ThemeMode;
 
 namespace AgeLanServer.WpfConfigManager;
 
@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         await _viewModel.SaveProfilesAsync();
     }
 
-    private void OnThemeChanged(ThemeMode theme)
+    private void OnThemeChanged(WpfThemeMode theme)
     {
         if (Application.Current is App app)
         {

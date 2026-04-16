@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Cloud;
 

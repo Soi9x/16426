@@ -1,7 +1,7 @@
 using AgeLanServer.Common;
 using AgeLanServer.Launcher;
-using AgeLanServer.LauncherConfig;
 using AgeLanServer.WpfConfigManager.Models;
+using LauncherConfigFacade = AgeLanServer.LauncherConfig.LauncherConfig;
 
 namespace AgeLanServer.WpfConfigManager.Services;
 
@@ -67,7 +67,7 @@ public sealed class LauncherRuntimeService
 
         try
         {
-            await LauncherConfig.RevertAsync(gameId, removeAll: false);
+            await LauncherConfigFacade.RevertAsync(gameId, removeAll: false);
         }
         catch (Exception ex)
         {
