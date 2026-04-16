@@ -62,7 +62,6 @@ public record BattleServerConfig : BattleServerBaseConfig
             BsPort == 0 || WebSocketPort == 0)
             return false;
 
-        // Kiểm tra tiến trình còn sống
         var proc = ProcessManager.FindProcessByPid((int)PID);
         if (proc == null || proc.HasExited)
         {
@@ -71,33 +70,79 @@ public record BattleServerConfig : BattleServerBaseConfig
         }
         proc.Dispose();
 
-        // Kiểm tra các cổng còn lắng nghe
-        var ipv4 = IPv4 == "auto" ? IPAddress.Any.ToString() : IPv4;
+        var candidateHosts = BuildValidationHosts(IPv4);
+        if (candidateHosts.Count == 0)
+            return false;
+
         var ports = new List<int> { BsPort, WebSocketPort };
         if (OutOfBandPort != 0)
             ports.Add(OutOfBandPort);
 
         foreach (var port in ports)
         {
-            try
+            var reachable = false;
+
+            foreach (var host in candidateHosts)
             {
-                using var client = new TcpClient();
-                var result = client.BeginConnect(ipv4, port, null, null);
-                var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
-                if (!success || !client.Connected)
+                if (IsPortReachable(host, port))
                 {
-                    client.Close();
-                    return false;
+                    reachable = true;
+                    break;
                 }
-                client.Close();
             }
-            catch
-            {
+
+            if (!reachable)
                 return false;
-            }
         }
 
         return true;
+    }
+
+    private static List<string> BuildValidationHosts(string configuredIp)
+    {
+        var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (string.Equals(configuredIp, "auto", StringComparison.OrdinalIgnoreCase) ||
+            configuredIp == IPAddress.Any.ToString() ||
+            configuredIp == "::")
+        {
+            hosts.Add(IPAddress.Loopback.ToString());
+
+            try
+            {
+                foreach (var address in Dns.GetHostAddresses(Dns.GetHostName()))
+                {
+                    if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
+                        continue;
+
+                    hosts.Add(address.ToString());
+                }
+            }
+            catch
+            {
+            }
+        }
+        else
+        {
+            hosts.Add(configuredIp);
+        }
+
+        return new List<string>(hosts);
+    }
+
+    private static bool IsPortReachable(string host, int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            var connectTask = client.ConnectAsync(host, port);
+            var completed = connectTask.Wait(TimeSpan.FromMilliseconds(250));
+            return completed && client.Connected;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Đường dẫn file TOML của cấu hình này.</summary>
