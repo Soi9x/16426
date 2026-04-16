@@ -28,6 +28,7 @@ public sealed class AdvertisementIdRequest
 /// </summary>
 public class AdvertisementBaseRequest
 {
+    [BindAlias("advertisementid")]
     public int Id { get; set; }
     public int AppBinaryChecksum { get; set; }
     public int DataChecksum { get; set; }
@@ -104,6 +105,7 @@ public sealed class SearchQuery
 {
     public int AppBinaryChecksum { get; set; }
     public int DataChecksum { get; set; }
+    [BindAlias("matchType_id")]
     public byte? MatchType { get; set; }
     public string ModDllFile { get; set; } = string.Empty;
     public int ModDllChecksum { get; set; }
@@ -117,7 +119,9 @@ public sealed class SearchQuery
 /// </summary>
 public sealed class WanQuery
 {
+    [BindAlias("count")]
     public int Length { get; set; }
+    [BindAlias("start")]
     public int Offset { get; set; }
 }
 
