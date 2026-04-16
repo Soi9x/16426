@@ -3,6 +3,7 @@ using System.Windows;
 using AgeLanServer.Common;
 using AgeLanServer.WpfConfigManager.Models;
 using AgeLanServer.WpfConfigManager.Services;
+using WpfThemeMode = AgeLanServer.WpfConfigManager.Models.ThemeMode;
 
 namespace AgeLanServer.WpfConfigManager.ViewModels;
 
@@ -16,13 +17,13 @@ public sealed class MainViewModel : ViewModelBase
     private readonly LauncherRuntimeService _launcherRuntimeService;
 
     private GameProfile? _selectedProfile;
-    private ThemeMode _theme = ThemeMode.Dark;
+    private WpfThemeMode _theme = WpfThemeMode.Dark;
     private string _statusMessage = "Sẵn sàng";
     private bool _isBusy;
 
     public ObservableCollection<GameProfile> Profiles { get; } = new();
 
-    public IReadOnlyList<ThemeMode> ThemeModes { get; } = new[] { ThemeMode.Dark, ThemeMode.Light };
+    public IReadOnlyList<WpfThemeMode> ThemeModes { get; } = new[] { WpfThemeMode.Dark, WpfThemeMode.Light };
 
     public IReadOnlyList<string> OnOffAutoModes { get; } = new[] { "auto", "true", "false" };
     public IReadOnlyList<string> RequiredOnOffModes { get; } = new[] { "required", "true", "false" };
@@ -44,7 +45,7 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
-    public ThemeMode Theme
+    public WpfThemeMode Theme
     {
         get => _theme;
         set
@@ -80,7 +81,7 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand StartLauncherCommand { get; }
     public RelayCommand StopLauncherCommand { get; }
 
-    public event Action<ThemeMode>? ThemeChanged;
+    public event Action<WpfThemeMode>? ThemeChanged;
 
     public MainViewModel()
     {
