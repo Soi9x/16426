@@ -1,6 +1,7 @@
-﻿using AgeLanServer.Server.Routes.Shared;
+using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.Login;
 using System.Collections.Concurrent;
+using System.Linq;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
@@ -39,7 +40,12 @@ public static class InvitationEndpoints
         ILogger<Program> logger)
     {
         var req = new ExtendInvitationRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || req.AdvertisementId == 0 || req.UserId == 0 || !LoginEndpoints.TryGetSession(ctx, out var inviterSession))
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         // 1. Kiá»ƒm tra advertisement tá»“n táº¡i
         // 2. Kiá»ƒm tra password khá»›p
         // 3. Kiá»ƒm tra user lÃ  peer trong advertisement
@@ -60,10 +66,15 @@ public static class InvitationEndpoints
         Invitations[invitationId] = invitation;
 
         // Gá»­i qua WebSocket cho invitee
-        var inviteeSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == req.UserId);
+        var inviteeSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == req.UserId);
         if (inviteeSession != null)
         {
-            var inviteMessage = new { invitationId, advertisementId = req.AdvertisementId };
+            var inviteMessage = new object[]
+            {
+                LoginEndpoints.EncodeProfileInfo(inviterSession, inviteeSession.ClientLibVersion),
+                req.AdvertisementId,
+                req.AdvertisementPassword
+            };
             await WsMessageSender.SendOrStoreMessageAsync(inviteeSession.SessionId, "ExtendInvitationMessage", inviteMessage);
         }
 
@@ -80,7 +91,12 @@ public static class InvitationEndpoints
         ILogger<Program> logger)
     {
         var req = new CancelInvitationRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || req.AdvertisementId == 0 || req.UserId == 0 || !LoginEndpoints.TryGetSession(ctx, out var inviterSession))
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         // 1. Kiá»ƒm tra advertisement tá»“n táº¡i
         // 2. Kiá»ƒm tra user lÃ  peer trong advertisement
         // 3. Kiá»ƒm tra invitee tá»“n táº¡i
@@ -96,10 +112,14 @@ public static class InvitationEndpoints
         }
 
         // Gá»­i qua WebSocket cho invitee
-        var inviteeSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == toRemove.Value.InviteeId);
+        var inviteeSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == toRemove.Value.InviteeId);
         if (inviteeSession != null)
         {
-            var cancelMessage = new { invitationId = toRemove.Value.Id, advertisementId = req.AdvertisementId };
+            var cancelMessage = new object[]
+            {
+                LoginEndpoints.EncodeProfileInfo(inviterSession, inviteeSession.ClientLibVersion),
+                req.AdvertisementId
+            };
             await WsMessageSender.SendOrStoreMessageAsync(inviteeSession.SessionId, "CancelInvitationMessage", cancelMessage);
         }
 
@@ -114,19 +134,29 @@ public static class InvitationEndpoints
         ILogger<Program> logger)
     {
         var req = new ReplyInvitationRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound || req.AdvertisementId == 0 || req.InviterId == 0 || !LoginEndpoints.TryGetSession(ctx, out var currentSession))
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         // 1. Kiá»ƒm tra advertisement tá»“n táº¡i
         // 2. Kiá»ƒm tra inviter tá»“n táº¡i
         // 3. Kiá»ƒm tra inviter lÃ  peer trong advertisement
         // 4. Gá»­i ReplyInvitationMessage qua WebSocket cho inviter (vá»›i "1" hoáº·c "0")
 
-        var responseCode = req.Accept ? 1 : 0;
+        var responseCode = req.Accept ? "1" : "0";
 
         // Gá»­i qua WebSocket cho inviter
-        var inviterSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == req.InviterId);
+        var inviterSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == req.InviterId);
         if (inviterSession != null)
         {
-            var replyMessage = new { invitationId = req.InvitationId, accepted = req.Accept, responseCode };
+            var replyMessage = new object[]
+            {
+                LoginEndpoints.EncodeProfileInfo(currentSession, inviterSession.ClientLibVersion),
+                req.AdvertisementId,
+                responseCode
+            };
             await WsMessageSender.SendOrStoreMessageAsync(inviterSession.SessionId, "ReplyInvitationMessage", replyMessage);
         }
 

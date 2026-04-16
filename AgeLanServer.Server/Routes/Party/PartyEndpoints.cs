@@ -1,6 +1,7 @@
-﻿using AgeLanServer.Server.Routes.Shared;
+using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.Login;
 using System.Collections.Concurrent;
+using System.Linq;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
@@ -138,18 +139,31 @@ public static class PartyEndpoints
         await HttpHelpers.BindAsync(ctx.Request, req);
         // 1. Kiá»ƒm tra user lÃ  peer trong match
         var userId = GetUserIdFromSession(ctx);
-        if (!Parties.TryGetValue(req.MatchId, out var party))
+        if (!Parties.TryGetValue(req.MatchId, out var party) || !party.Peers.ContainsKey(userId))
         {
-            return Results.Ok(new object[] { 1 });
+            return Results.Ok(new object[] { 2 });
         }
+
+        var recipients = req.ToProfileIds.Data.Count > 0
+            ? req.ToProfileIds.Data
+            : (req.ToProfileId != 0 ? new List<int> { req.ToProfileId } : party.Peers.Keys.ToList());
 
         // 2. Táº¡o tin nháº¯n tá»« advertisement
         // 3. Gá»­i MatchReceivedChatMessage qua WebSocket cho tá»«ng ngÆ°á»i nháº­n
-        var chatMessage = new { matchId = req.MatchId, senderId = userId, message = req.Message };
-        foreach (var peerId in party.Peers.Keys)
+        var chatMessage = new { matchId = req.MatchId, senderId = userId, message = req.Message, messageTypeId = req.MessageTypeId };
+        foreach (var peerId in recipients)
         {
-            if (peerId == userId) continue; // KhÃ´ng gá»­i láº¡i cho ngÆ°á»i gá»­i
-            var peerSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == peerId);
+            if (peerId == userId)
+            {
+                continue;
+            }
+
+            if (!party.Peers.ContainsKey(peerId))
+            {
+                return Results.Ok(new object[] { 2 });
+            }
+
+            var peerSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == peerId);
             if (peerSession != null)
             {
                 await WsMessageSender.SendOrStoreMessageAsync(peerSession.SessionId, "MatchReceivedChatMessage", chatMessage);

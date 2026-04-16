@@ -379,7 +379,9 @@ public sealed class MatchChatRequest
 /// </summary>
 public sealed class ExtendInvitationRequest : InvitationRequest
 {
+    [BindAlias("inviteeid")]
     public int UserId { get; set; }
+    [BindAlias("gatheringpassword")]
     public string AdvertisementPassword { get; set; } = string.Empty;
 }
 
@@ -388,6 +390,7 @@ public sealed class ExtendInvitationRequest : InvitationRequest
 /// </summary>
 public sealed class CancelInvitationRequest : InvitationRequest
 {
+    [BindAlias("inviteeid")]
     public int UserId { get; set; }
 }
 
@@ -396,7 +399,9 @@ public sealed class CancelInvitationRequest : InvitationRequest
 /// </summary>
 public sealed class ReplyInvitationRequest : InvitationRequest
 {
+    [BindAlias("invitationreply")]
     public bool Accept { get; set; }
+    [BindAlias("inviterid")]
     public int InviterId { get; set; }
     public string InvitationId { get; set; } = string.Empty;
 }

@@ -225,3 +225,25 @@ Sau chỉnh sửa, flow dữ liệu presence và endpoint compatibility đã sá
 ### 8.5 Đồng bộ runtime game id thêm cho nhiều route response loaders
 - Các route trước đó hardcode `age4` (achievement/automatch/challenge/item/leaderboard/chat/cloud/community event) đã fallback theo `ServerRuntime.CurrentGameId`.
 - Giảm sai lệch dữ liệu file responses/config khi chạy game khác `age4`.
+
+### 8.6 Rà soát bổ sung nhóm account / invitation / party
+- `AccountEndpoints` đã chỉnh lại theo Go gần hơn:
+  - `setLanguage` trả `2` như Go hiện tại.
+  - `FindProfilesByPlatformID` lọc theo `platformUserID` thay vì nhầm sang profile id.
+  - `FindProfiles` và `getProfileName` trả profile payload theo encode flow dùng ở login.
+  - `setAvatarMetadata` trả profile info sau update.
+  - `get/add/clear profile property` dùng key theo user hiện tại, response shape sát Go hơn.
+- `RouteDtos` đã bổ sung alias Go-specific cho invitation payload:
+  - `inviteeid`, `gatheringpassword`, `invitationreply`, `inviterid`.
+- `InvitationEndpoints` và `PartyEndpoints` đã chỉnh lookup session theo **user id** (không dùng nhầm profile id), giúp notify đúng người nhận.
+
+### 8.7 WebSocket session-switch parity
+- `WsMessageSender.HandleConnectionAsync` đã thêm kiểm tra session tồn tại khi đổi `sessionToken` (operation=0), và ngắt kết nối nếu token không hợp lệ hoặc session hết hạn.
+- Hành vi này bám sát loop xác thực session phía Go hơn, tránh giữ websocket sống với session rỗng/hỏng.
+
+### 8.8 Cloudfiles compatibility
+- Bổ sung map route cho cả:
+  - `GET /cloudfiles`
+  - `GET /cloudfiles/`
+  - `GET /cloudfiles/{*path}`
+- Tăng khả năng tương thích pattern gọi từ client và tương đương Go route prefix handling.

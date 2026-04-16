@@ -194,6 +194,8 @@ public static class CloudFilesEndpoint
     /// </summary>
     public static void RegisterEndpoint(IEndpointRouteBuilder app)
     {
+        app.MapGet("/cloudfiles", Handle);
+        app.MapGet("/cloudfiles/", Handle);
         app.MapGet("/cloudfiles/{*path}", Handle);
     }
 }

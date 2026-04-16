@@ -148,7 +148,7 @@ public static class ChatEndpoints
         var joinMessage = new { chatroomId = req.ChatroomId, userId = userId, userName = userName };
         foreach (var memberUserId in channel.Users.Keys)
         {
-            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == memberUserId);
+            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == memberUserId);
             if (memberSession != null)
             {
                 await WsMessageSender.SendOrStoreMessageAsync(memberSession.SessionId, "ChannelJoinMessage", joinMessage);
@@ -181,7 +181,7 @@ public static class ChatEndpoints
         var leaveMessage = new { chatroomId = req.ChatroomId, userId = userId };
         foreach (var memberUserId in channel.Users.Keys)
         {
-            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == memberUserId);
+            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == memberUserId);
             if (memberSession != null)
             {
                 await WsMessageSender.SendOrStoreMessageAsync(memberSession.SessionId, "ChannelLeaveMessage", leaveMessage);
@@ -217,7 +217,7 @@ public static class ChatEndpoints
         foreach (var memberUserId in channel.Users.Keys)
         {
             if (memberUserId == userId) continue; // KhÃ´ng gá»­i láº¡i cho ngÆ°á»i gá»­i
-            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == memberUserId);
+            var memberSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == memberUserId);
             if (memberSession != null)
             {
                 await WsMessageSender.SendOrStoreMessageAsync(memberSession.SessionId, "ChannelChatMessage", chatMessage);
@@ -249,7 +249,7 @@ public static class ChatEndpoints
         var whisperMessage = new { senderId = userId, message = req.Message };
         foreach (var recipientId in recipients)
         {
-            var recipientSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.ProfileId == recipientId);
+            var recipientSession = LoginEndpoints.Sessions.Values.FirstOrDefault(s => s.UserId == recipientId);
             if (recipientSession != null)
             {
                 await WsMessageSender.SendOrStoreMessageAsync(recipientSession.SessionId, "PersonalChatMessage", whisperMessage);

@@ -155,12 +155,27 @@ public static class WsMessageSender
                             var newSid = newTokenElem.GetString();
                             if (!string.IsNullOrEmpty(newSid) && newSid != sessionId)
                             {
+                                if (!LoginEndpoints.Sessions.ContainsKey(newSid))
+                                {
+                                    break;
+                                }
+
                                 Connections.TryRemove(sessionId, out _);
                                 sessionId = newSid;
                                 AddConnection(sessionId, ws);
                             }
                         }
+                        else if (!LoginEndpoints.Sessions.ContainsKey(sessionId))
+                        {
+                            break;
+                        }
                     }
+
+                    if (!LoginEndpoints.Sessions.ContainsKey(sessionId))
+                    {
+                        break;
+                    }
+
                     ResetSessionExpiry(sessionId);
                 }
                 catch (OperationCanceledException) { break; }
