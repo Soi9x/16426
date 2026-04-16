@@ -115,11 +115,15 @@ else if (authMode == "required")
 
 AppLogger.Info($"Chế độ xác thực: {authMode}");
 
+var rawGameId = ConfigLoader.ResolveValue<string?>(null, "Server.GameId", tomlConfig, GameIds.AgeOfEmpires4)
+                ?? GameIds.AgeOfEmpires4;
+var normalizedGameId = GameIds.Normalize(rawGameId) ?? GameIds.AgeOfEmpires4;
+
 var serverConfig = new LanServer.ServerConfig
 {
     Port = ConfigLoader.ResolveValue<int?>(null, "Server.Port", tomlConfig, 443) ?? 443,
     Host = ConfigLoader.ResolveValue<string?>(null, "Server.Host", tomlConfig, "0.0.0.0"),
-    GameId = ConfigLoader.ResolveValue<string?>(null, "Server.GameId", tomlConfig, "age4") ?? "age4",
+    GameId = normalizedGameId,
     LogRequests = ConfigLoader.ResolveValue<bool?>(null, "Server.LogRequests", tomlConfig, true) ?? true,
     AuthenticationMode = authMode
 };

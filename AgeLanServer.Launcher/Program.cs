@@ -55,11 +55,14 @@ public static class LauncherApp
     /// </summary>
     public static async Task<int> RunAsync(LauncherConfig config, CancellationToken ct = default)
     {
-        if (!GameIds.IsValid(config.GameId))
+        var normalizedGameId = GameIds.Normalize(config.GameId);
+        if (normalizedGameId is null)
         {
             AppLogger.Error($"Game ID không hợp lệ: {config.GameId}");
             return LauncherErrorCodes.InvalidGame;
         }
+
+        config = config with { GameId = normalizedGameId };
 
         AppLogger.Info($"=== Age LAN Server Launcher ===");
         AppLogger.Info($"Game: {config.GameId}");
@@ -347,7 +350,16 @@ public static class LauncherApp
         if (client.Executable.Equals("steam", StringComparison.OrdinalIgnoreCase))
         {
             // Mở qua Steam URI
-            var steamUri = $"steam://run/1466860"; // AoE4 AppId
+            var steamAppId = gameId switch
+            {
+                GameIds.AgeOfEmpires1 => "1017900",
+                GameIds.AgeOfEmpires2 => "813780",
+                GameIds.AgeOfEmpires3 => "933110",
+                GameIds.AgeOfEmpires4 => "1466860",
+                GameIds.AgeOfMythology => "1934680",
+                _ => "1466860"
+            };
+            var steamUri = $"steam://run/{steamAppId}";
             AppLogger.Info($"Mở Steam URI: {steamUri}");
 
             if (OperatingSystem.IsWindows())
@@ -365,10 +377,10 @@ public static class LauncherApp
             // Mở Xbox app qua shell:appsfolder với family name lookup
             var familyName = gameId switch
             {
-                "aoe1" => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
-                "aoe2" => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
-                "age4" => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
-                "aom" => "Microsoft.AgeofMythologyRetold_8wekyb3d8bbwe",
+                GameIds.AgeOfEmpires1 => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
+                GameIds.AgeOfEmpires2 => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
+                GameIds.AgeOfEmpires4 => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
+                GameIds.AgeOfMythology => "Microsoft.AgeofMythologyRetold_8wekyb3d8bbwe",
                 _ => string.Empty
             };
 
@@ -501,9 +513,17 @@ public static class Program
 
         rootCmd.SetHandler(async (game, serverExe, clientExe, clientPath, noCert, noHosts, noIsolate) =>
         {
+            var normalizedGameId = GameIds.Normalize(game);
+            if (normalizedGameId is null)
+            {
+                AppLogger.Error($"Game ID không hợp lệ: {game}");
+                Environment.ExitCode = (int)LauncherErrorCodes.InvalidGame;
+                return;
+            }
+
             var config = new LauncherApp.LauncherConfig
             {
-                GameId = game,
+                GameId = normalizedGameId,
                 Server = new LauncherApp.ServerConfig
                 {
                     ExecutablePath = serverExe ?? ExecutablePaths.FindExecutablePath(ExecutablePaths.Server) ?? string.Empty

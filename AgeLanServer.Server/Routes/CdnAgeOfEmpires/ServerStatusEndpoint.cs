@@ -25,10 +25,14 @@ public static class ServerStatusEndpoint
 
     /// <summary>
     /// Đăng ký endpoint ServerStatus.
-    /// Route: GET /cdn/ageofempires/aoe/serverStatus
+    /// Route gốc theo Go:
+    /// - GET /aoe/rl-server-status.json
+    /// - GET /aoe/athens-server-status.json
     /// </summary>
     public static void RegisterEndpoint(IEndpointRouteBuilder app)
     {
+        app.MapGet("/aoe/rl-server-status.json", Handle);
+        app.MapGet("/aoe/athens-server-status.json", Handle);
         app.MapGet("/cdn/ageofempires/aoe/serverStatus", Handle);
     }
 }

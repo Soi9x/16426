@@ -94,10 +94,11 @@ public static class TextModerationEndpoint
 
     /// <summary>
     /// Đăng ký endpoint TextModeration.
-    /// Route: POST /api/ageofempires/textmoderation
+    /// Route gốc theo Go: POST /textmoderation
     /// </summary>
     public static void RegisterEndpoint(IEndpointRouteBuilder app)
     {
+        app.MapPost("/textmoderation", Handle);
         app.MapPost("/api/ageofempires/textmoderation", Handle);
     }
 }

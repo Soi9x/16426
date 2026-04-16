@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using AgeLanServer.Common;
 using AgeLanServer.LauncherConfig;
 
 namespace AgeLanServer.LauncherConfig.Cmd;
@@ -83,13 +84,22 @@ public class CmdSetup
     /// </summary>
     public async Task<int> ExecuteAsync()
     {
-        // Xu ly game AoE1 va AoE4 - mot so tinh nang khong ho tro
-        if (GameId == "aoe1")
+        var normalizedGameId = GameIds.Normalize(GameId);
+        if (normalizedGameId is null)
+        {
+            Console.WriteLine("Loi: Game khong hop le");
+            return (int)LauncherError.InvalidGame;
+        }
+
+        GameId = normalizedGameId;
+
+        // Xu ly game Age1 va Age4 - mot so tinh nang khong ho tro
+        if (GameId == GameIds.AgeOfEmpires1)
         {
             DoBackupMetadata = false;
             CaStoreCert = null;
         }
-        else if (GameId == "aoe4")
+        else if (GameId == GameIds.AgeOfEmpires4)
         {
             CaStoreCert = null;
         }
@@ -572,7 +582,7 @@ public class CmdSetup
     /// </summary>
     private static bool IsValidGame(string gameId)
     {
-        return gameId is "aoe1" or "aoe2de" or "aoe3de" or "aoe4";
+        return GameIds.IsValid(gameId);
     }
 
     /// <summary>

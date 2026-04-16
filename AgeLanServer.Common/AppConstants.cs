@@ -45,19 +45,19 @@ public static class AppConstants
     public const string VersionHeader = "X-Version";
 
     /// <summary>Game ID: Age of Empires 1.</summary>
-    public const string GameAoE1 = "aoe1";
+    public const string GameAoE1 = GameIds.AgeOfEmpires1;
 
     /// <summary>Game ID: Age of Empires 2.</summary>
-    public const string GameAoE2 = "aoe2";
+    public const string GameAoE2 = GameIds.AgeOfEmpires2;
 
     /// <summary>Game ID: Age of Empires 3.</summary>
-    public const string GameAoE3 = "aoe3";
+    public const string GameAoE3 = GameIds.AgeOfEmpires3;
 
     /// <summary>Game ID: Age of Empires 4.</summary>
-    public const string GameAoE4 = "aoe4";
+    public const string GameAoE4 = GameIds.AgeOfEmpires4;
 
     /// <summary>Game ID: Age of Mythology.</summary>
-    public const string GameAoM = "aom";
+    public const string GameAoM = GameIds.AgeOfMythology;
 
     /// <summary>Thư mục resources.</summary>
     public const string ResourcesDir = "resources";

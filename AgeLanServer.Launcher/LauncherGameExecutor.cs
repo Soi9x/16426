@@ -61,10 +61,11 @@ public record SteamExec : IGameExec
     {
         return gameId switch
         {
-            "aoe1" => "1017900",
-            "aoe2" => "813780",
-            "age4" => "1466860",
-            "aom" => "2668460",
+            var g when g == GameIds.AgeOfEmpires1 => "1017900",
+            var g when g == GameIds.AgeOfEmpires2 => "813780",
+            var g when g == GameIds.AgeOfEmpires3 => "933110",
+            var g when g == GameIds.AgeOfEmpires4 => "1466860",
+            var g when g == GameIds.AgeOfMythology => "1934680",
             _ => string.Empty
         };
     }
@@ -73,10 +74,11 @@ public record SteamExec : IGameExec
     {
         return gameId switch
         {
-            "aoe1" => "Age of Empires DE",
-            "aoe2" => "Age of Empires II DE",
-            "age4" => "Age of Empires IV",
-            "aom" => "Age of Mythology Retold",
+            var g when g == GameIds.AgeOfEmpires1 => "Age of Empires DE",
+            var g when g == GameIds.AgeOfEmpires2 => "Age of Empires II DE",
+            var g when g == GameIds.AgeOfEmpires3 => "Age of Empires III DE",
+            var g when g == GameIds.AgeOfEmpires4 => "Age of Empires IV",
+            var g when g == GameIds.AgeOfMythology => "Age of Mythology Retold",
             _ => gameId
         };
     }
@@ -133,9 +135,10 @@ public record XboxExec : IGameExec
     {
         return gameId switch
         {
-            "aoe1" => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
-            "aoe2" => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
-            "age4" => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires1 => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires2 => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires4 => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfMythology => "Microsoft.AgeofMythologyRetold_8wekyb3d8bbwe",
             _ => string.Empty
         };
     }
@@ -197,6 +200,8 @@ public static class GameExecutor
     /// </summary>
     public static IGameExec? MakeExec(string gameId, string executable)
     {
+        gameId = GameIds.Normalize(gameId) ?? gameId;
+
         if (executable != "auto")
         {
             switch (executable)
@@ -228,14 +233,12 @@ public static class GameExecutor
 
     private static IGameExec? TryCreateXboxExec(string gameId)
     {
-        if (gameId != "aom")
+        var (ok, gameLocation) = FindXboxGameLocation(gameId);
+        if (ok)
         {
-            var (ok, gameLocation) = FindXboxGameLocation(gameId);
-            if (ok)
-            {
-                return new XboxExec(gameId, gameLocation);
-            }
+            return new XboxExec(gameId, gameLocation);
         }
+
         return null;
     }
 
@@ -347,10 +350,11 @@ public static class GameExecutor
     {
         return gameId switch
         {
-            "aoe1" => "1017900",
-            "aoe2" => "813780",
-            "age4" => "1466860",
-            "aom" => "2668460",
+            var g when g == GameIds.AgeOfEmpires1 => "1017900",
+            var g when g == GameIds.AgeOfEmpires2 => "813780",
+            var g when g == GameIds.AgeOfEmpires3 => "933110",
+            var g when g == GameIds.AgeOfEmpires4 => "1466860",
+            var g when g == GameIds.AgeOfMythology => "1934680",
             _ => string.Empty
         };
     }
@@ -359,9 +363,10 @@ public static class GameExecutor
     {
         return gameId switch
         {
-            "aoe1" => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
-            "aoe2" => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
-            "age4" => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires1 => "Microsoft.AgeofEmpiresDefinitiveEdition_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires2 => "Microsoft.AgeofEmpiresIIDefinitiveEdition_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfEmpires4 => "Microsoft.AgeofEmpiresIV_8wekyb3d8bbwe",
+            var g when g == GameIds.AgeOfMythology => "Microsoft.AgeofMythologyRetold_8wekyb3d8bbwe",
             _ => string.Empty
         };
     }

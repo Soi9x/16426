@@ -1,7 +1,10 @@
 // Port từ server/internal/http.go
 // Tiện ích HTTP: JSON wrapper, bind request, write response.
 
+using System.Collections;
+using System.Globalization;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
@@ -16,6 +19,17 @@ public class JsonWrapper<T>
 {
     [JsonPropertyName("data")]
     public T Data { get; set; } = default!;
+}
+
+[AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
+public sealed class BindAliasAttribute : Attribute
+{
+    public BindAliasAttribute(string name)
+    {
+        Name = name;
+    }
+
+    public string Name { get; }
 }
 
 /// <summary>
@@ -97,29 +111,15 @@ public static class HttpHelpers
     /// </summary>
     private static void BindFromQuery(IQueryCollection query, object destination)
     {
-        var props = destination.GetType().GetProperties(
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-        foreach (var prop in props)
+        BindFromValues(destination, key =>
         {
-            if (query.TryGetValue(prop.Name, out var value) && value.Count > 0)
+            if (query.TryGetValue(key, out var value) && value.Count > 0)
             {
-                var strVal = value.ToString();
-                if (!string.IsNullOrEmpty(strVal) && prop.CanWrite)
-                {
-                    var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                    try
-                    {
-                        var converted = Convert.ChangeType(strVal, targetType);
-                        prop.SetValue(destination, converted);
-                    }
-                    catch
-                    {
-                        // Bỏ qua nếu không convert được (tương đương ignore unknown keys trong Go)
-                    }
-                }
+                return value.ToString();
             }
-        }
+
+            return null;
+        });
     }
 
     /// <summary>
@@ -127,29 +127,413 @@ public static class HttpHelpers
     /// </summary>
     private static void BindFromForm(IFormCollection form, object destination)
     {
-        var props = destination.GetType().GetProperties(
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        BindFromValues(destination, key =>
+        {
+            if (form.TryGetValue(key, out var value) && value.Count > 0)
+            {
+                return value.ToString();
+            }
+
+            return null;
+        });
+    }
+
+    private static void BindFromValues(object destination, Func<string, string?> valueProvider)
+    {
+        var props = destination.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         foreach (var prop in props)
         {
-            if (form.TryGetValue(prop.Name, out var value) && value.Count > 0)
+            if (!prop.CanWrite)
             {
-                var strVal = value.ToString();
-                if (!string.IsNullOrEmpty(strVal) && prop.CanWrite)
+                continue;
+            }
+
+            foreach (var key in GetBindingKeys(prop))
+            {
+                var strVal = valueProvider(key);
+                if (string.IsNullOrEmpty(strVal))
                 {
-                    var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                    try
-                    {
-                        var converted = Convert.ChangeType(strVal, targetType);
-                        prop.SetValue(destination, converted);
-                    }
-                    catch
-                    {
-                        // Bỏ qua nếu không convert được
-                    }
+                    continue;
                 }
+
+                if (TryConvertValue(strVal, prop.PropertyType, out var converted))
+                {
+                    prop.SetValue(destination, converted);
+                }
+
+                break;
             }
         }
+    }
+
+    private static IEnumerable<string> GetBindingKeys(PropertyInfo prop)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            prop.Name,
+            ToCamelCase(prop.Name),
+            ToSnakeCase(prop.Name),
+        };
+
+        var idName = ConvertIdSuffix(prop.Name);
+        keys.Add(idName);
+        keys.Add(ToCamelCase(idName));
+
+        foreach (var alias in prop.GetCustomAttributes<BindAliasAttribute>())
+        {
+            if (!string.IsNullOrWhiteSpace(alias.Name))
+            {
+                keys.Add(alias.Name);
+            }
+        }
+
+        return keys;
+    }
+
+    private static bool TryConvertValue(string value, Type propertyType, out object? converted)
+    {
+        converted = null;
+        var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+        if (TryConvertStructuredValue(value, targetType, out converted))
+        {
+            return true;
+        }
+
+        try
+        {
+            if (targetType == typeof(string))
+            {
+                converted = value;
+                return true;
+            }
+
+            if (targetType == typeof(bool))
+            {
+                if (value == "1")
+                {
+                    converted = true;
+                    return true;
+                }
+
+                if (value == "0")
+                {
+                    converted = false;
+                    return true;
+                }
+
+                if (bool.TryParse(value, out var boolValue))
+                {
+                    converted = boolValue;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (targetType.IsEnum)
+            {
+                converted = Enum.Parse(targetType, value, ignoreCase: true);
+                return true;
+            }
+
+            converted = Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryConvertStructuredValue(string value, Type targetType, out object? converted)
+    {
+        converted = null;
+
+        if (TryConvertJsonArrayWrapper(value, targetType, out converted))
+        {
+            return true;
+        }
+
+        if (TryConvertGenericList(value, targetType, out converted))
+        {
+            return true;
+        }
+
+        if (TryConvertStringDictionary(value, targetType, out converted))
+        {
+            return true;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length > 0 && (trimmed[0] == '[' || trimmed[0] == '{'))
+        {
+            try
+            {
+                converted = JsonSerializer.Deserialize(trimmed, targetType, JsonOptions);
+                return converted is not null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryConvertJsonArrayWrapper(string value, Type targetType, out object? converted)
+    {
+        converted = null;
+        if (!targetType.IsGenericType || targetType.Name != "JsonArray`1")
+        {
+            return false;
+        }
+
+        var dataProperty = targetType.GetProperty("Data", BindingFlags.Public | BindingFlags.Instance);
+        if (dataProperty is null ||
+            !dataProperty.CanWrite ||
+            !dataProperty.PropertyType.IsGenericType ||
+            dataProperty.PropertyType.GetGenericTypeDefinition() != typeof(List<>))
+        {
+            return false;
+        }
+
+        var elementType = targetType.GetGenericArguments()[0];
+        if (!TryConvertToList(value, elementType, out var listObject))
+        {
+            return false;
+        }
+
+        var wrapper = Activator.CreateInstance(targetType);
+        if (wrapper is null)
+        {
+            return false;
+        }
+
+        dataProperty.SetValue(wrapper, listObject);
+        converted = wrapper;
+        return true;
+    }
+
+    private static bool TryConvertGenericList(string value, Type targetType, out object? converted)
+    {
+        converted = null;
+        if (!targetType.IsGenericType || targetType.GetGenericTypeDefinition() != typeof(List<>))
+        {
+            return false;
+        }
+
+        var elementType = targetType.GetGenericArguments()[0];
+        if (!TryConvertToList(value, elementType, out var listObject))
+        {
+            return false;
+        }
+
+        converted = listObject;
+        return true;
+    }
+
+    private static bool TryConvertStringDictionary(string value, Type targetType, out object? converted)
+    {
+        converted = null;
+        if (targetType != typeof(Dictionary<string, string>))
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("{", StringComparison.Ordinal) && trimmed.EndsWith("}", StringComparison.Ordinal))
+        {
+            try
+            {
+                converted = JsonSerializer.Deserialize<Dictionary<string, string>>(trimmed, JsonOptions)
+                            ?? new Dictionary<string, string>();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var parts = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            var keyValue = part.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (keyValue.Length == 2 && !string.IsNullOrEmpty(keyValue[0]))
+            {
+                dict[keyValue[0]] = keyValue[1];
+            }
+        }
+
+        converted = dict;
+        return dict.Count > 0;
+    }
+
+    private static bool TryConvertToList(string value, Type elementType, out object? listObject)
+    {
+        listObject = null;
+
+        var listType = typeof(List<>).MakeGenericType(elementType);
+        if (Activator.CreateInstance(listType) is not IList list)
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            listObject = list;
+            return true;
+        }
+
+        if (trimmed.StartsWith("[", StringComparison.Ordinal) || trimmed.StartsWith("{", StringComparison.Ordinal))
+        {
+            if (!TryPopulateListFromJson(trimmed, elementType, list))
+            {
+                return false;
+            }
+
+            listObject = list;
+            return true;
+        }
+
+        var values = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var item in values)
+        {
+            if (!TryConvertValue(item, elementType, out var converted) || converted is null)
+            {
+                return false;
+            }
+
+            list.Add(converted);
+        }
+
+        listObject = list;
+        return true;
+    }
+
+    private static bool TryPopulateListFromJson(string json, Type elementType, IList targetList)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            JsonElement source;
+
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                source = doc.RootElement;
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                     doc.RootElement.TryGetProperty("data", out var dataElement) &&
+                     dataElement.ValueKind == JsonValueKind.Array)
+            {
+                source = dataElement;
+            }
+            else
+            {
+                return false;
+            }
+
+            foreach (var item in source.EnumerateArray())
+            {
+                if (!TryConvertJsonElement(item, elementType, out var converted) || converted is null)
+                {
+                    return false;
+                }
+
+                targetList.Add(converted);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryConvertJsonElement(JsonElement element, Type targetType, out object? converted)
+    {
+        converted = null;
+
+        var raw = element.GetRawText();
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var text = element.GetString() ?? string.Empty;
+            return TryConvertValue(text, targetType, out converted);
+        }
+
+        if (TryConvertStructuredValue(raw, targetType, out converted))
+        {
+            return true;
+        }
+
+        try
+        {
+            converted = JsonSerializer.Deserialize(raw, targetType, JsonOptions);
+            return converted is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    private static string ToCamelCase(string value)
+    {
+        if (string.IsNullOrEmpty(value) || char.IsLower(value[0]))
+        {
+            return value;
+        }
+
+        return char.ToLowerInvariant(value[0]) + value[1..];
+    }
+
+    private static string ToSnakeCase(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        var result = new System.Text.StringBuilder(value.Length + 8);
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (char.IsUpper(c) && i > 0)
+            {
+                result.Append('_');
+            }
+
+            result.Append(char.ToLowerInvariant(c));
+        }
+
+        return result.ToString();
+    }
+
+    private static string ConvertIdSuffix(string value)
+    {
+        if (value.EndsWith("Ids", StringComparison.Ordinal))
+        {
+            return value[..^3] + "IDs";
+        }
+
+        if (value.EndsWith("Id", StringComparison.Ordinal))
+        {
+            return value[..^2] + "ID";
+        }
+
+        return value;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using AgeLanServer.Common;
 
 namespace AgeLanServer.LauncherConfig;
 
@@ -19,9 +20,9 @@ public sealed class CaCertManager
     /// <param name="gamePath">Duong dan den thu muc game.</param>
     public CaCertManager(string gameId, string gamePath)
     {
-        _gameId = gameId;
+        _gameId = GameIds.Normalize(gameId) ?? gameId;
         // AoE2 co thu muc certificates con
-        _gamePath = gameId == "aoe2de"
+        _gamePath = _gameId == GameIds.AgeOfEmpires2
             ? Path.Combine(gamePath, "certificates")
             : gamePath;
     }

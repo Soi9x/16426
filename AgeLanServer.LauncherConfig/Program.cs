@@ -22,11 +22,14 @@ public static class LauncherConfig
         string? certDataBase64,
         CancellationToken ct = default)
     {
-        if (!GameIds.IsValid(gameId))
+        var normalizedGameId = GameIds.Normalize(gameId);
+        if (normalizedGameId is null)
         {
             AppLogger.Error($"Game ID không hợp lệ: {gameId}");
             return LauncherErrorCodes.InvalidGame;
         }
+
+        gameId = normalizedGameId;
 
         var revertArgs = new ConfigRevertManager.RevertArgs
         {
@@ -151,7 +154,7 @@ public static class LauncherConfig
             return ErrorCodes.Success;
         }
 
-        var targetGameId = gameId ?? storedArgs?.GameId ?? string.Empty;
+        var targetGameId = GameIds.Normalize(gameId ?? storedArgs?.GameId ?? string.Empty) ?? string.Empty;
 
         if (removeAll)
         {

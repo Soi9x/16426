@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Collections.Generic;
 using System.Net;
@@ -117,11 +117,19 @@ public static class LauncherCmdRoot
         rootCommand.SetHandler(async (context) =>
         {
             var parseResult = context.ParseResult;
-            var gameId = parseResult.GetValueForOption(gameOption);
-            if (string.IsNullOrEmpty(gameId))
+            var gameIdInput = parseResult.GetValueForOption(gameOption);
+            if (string.IsNullOrEmpty(gameIdInput))
             {
                 LauncherLogger.Error("Thiáº¿u tham sá»‘ báº¯t buá»™c '--game'");
                 Environment.Exit(ErrorCodes.General);
+                return;
+            }
+
+            var gameId = GameIds.Normalize(gameIdInput);
+            if (gameId is null)
+            {
+                LauncherLogger.Error($"Loáº¡i game khÃ´ng há»£p lá»‡: {gameIdInput}");
+                Environment.Exit((int)LauncherErrorCodes.InvalidGame);
                 return;
             }
 
@@ -175,7 +183,7 @@ public static class LauncherCmdRoot
                 }
 
                 var canBroadcastBattleServer = FalseValue;
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && gameId != "aom" && gameId != "age4")
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && gameId != GameIds.AgeOfMythology && gameId != GameIds.AgeOfEmpires4)
                 {
                     canBroadcastBattleServer = cfg.Config.CanBroadcastBattleServer;
                     if (!CanBroadcastBattleServerValues.Contains(canBroadcastBattleServer))
@@ -231,7 +239,7 @@ public static class LauncherCmdRoot
                     return;
                 }
 
-                var supportedGames = new HashSet<string> { "aoe1", "aoe2", "age4", "aom" };
+                var supportedGames = new HashSet<string>(GameIds.SupportedGames);
                 if (!supportedGames.Contains(gameId))
                 {
                     LauncherLogger.Error("Loáº¡i game khÃ´ng há»£p lá»‡");
@@ -324,7 +332,7 @@ public static class LauncherCmdRoot
                 var clientExecutable = cfg.Client.Executable.Path;
                 var clientExecutableOfficial = clientExecutable == AutoValue || clientExecutable == "steam" || clientExecutable == "msstore";
 
-                var isolateMetadata = gameId != "aoe1"
+                var isolateMetadata = gameId != GameIds.AgeOfEmpires1
                     ? LauncherCmdUtils.ResolveIsolateValue(isolateMetadataStr, clientExecutableOfficial)
                     : false;
                 var isolateProfiles = LauncherCmdUtils.ResolveIsolateValue(isolateProfilesStr, clientExecutableOfficial);
@@ -363,7 +371,7 @@ public static class LauncherCmdRoot
                         return;
                     }
                 }
-                else if (!isolateProfiles || (gameId != "aoe1" && !isolateMetadata))
+                else if (!isolateProfiles || (gameId != GameIds.AgeOfEmpires1 && !isolateMetadata))
                 {
                     LauncherLogger.Error("CÃ´ láº­p profile vÃ  metadata lÃ  báº¯t buá»™c khi sá»­ dá»¥ng launcher chÃ­nh thá»©c.");
                     errorCode = LauncherErrorCodes.InvalidGame + 14; // ErrRequiredIsolation
@@ -400,7 +408,7 @@ public static class LauncherCmdRoot
                 var serverHost = cfg.Server.Host;
                 LauncherLogger.Info($"Game {gameId}.");
 
-                if (clientExecutable == "msstore" && gameId == "aom")
+                if (clientExecutable == "msstore" && gameId == GameIds.AgeOfMythology)
                 {
                     LauncherLogger.Error("PhiÃªn báº£n Microsoft Store (Xbox) khÃ´ng Ä‘Æ°á»£c há»— trá»£ trÃªn game nÃ y.");
                     errorCode = LauncherErrorCodes.InvalidGame + 17; // ErrGameUnsupportedLauncherCombo
@@ -417,7 +425,7 @@ public static class LauncherCmdRoot
                 {
                     case SteamExec steamExec:
                         LauncherLogger.Info("Game tÃ¬m tháº¥y trÃªn Steam.");
-                        if (gameId != "aoe1" && gameId != "age4")
+                        if (gameId != GameIds.AgeOfEmpires1 && gameId != GameIds.AgeOfEmpires4)
                         {
                             gamePath = steamExec.GamePath();
                         }
@@ -425,7 +433,7 @@ public static class LauncherCmdRoot
 
                     case XboxExec xboxExec:
                         LauncherLogger.Info("Game tÃ¬m tháº¥y trÃªn Xbox.");
-                        if (gameId != "aoe1" && gameId != "age4")
+                        if (gameId != GameIds.AgeOfEmpires1 && gameId != GameIds.AgeOfEmpires4)
                         {
                             gamePath = xboxExec.GamePath();
                         }
@@ -447,7 +455,7 @@ public static class LauncherCmdRoot
                                 isolateProfiles = false;
                             }
                         }
-                        if (gameId != "aoe1" && gameId != "age4")
+                        if (gameId != GameIds.AgeOfEmpires1 && gameId != GameIds.AgeOfEmpires4)
                         {
                             var clientPath = cfg.Client.Path;
                             if (!string.IsNullOrEmpty(clientPath) && clientPath != "auto" && Directory.Exists(clientPath))
@@ -638,14 +646,14 @@ public static class LauncherCmdRoot
                             serverArgs.Add("--deterministic");
                     }
 
-                    if ((gameId == "aom" || gameId == "age4") && battleServerManagerRun == FalseValue)
+                    if ((gameId == GameIds.AgeOfMythology || gameId == GameIds.AgeOfEmpires4) && battleServerManagerRun == FalseValue)
                     {
                         LauncherLogger.Error("Game nÃ y cáº§n Battle Server khá»Ÿi Ä‘á»™ng nhÆ°ng báº¡n khÃ´ng cho phÃ©p, " +
                             "hÃ£y Ä‘áº£m báº£o báº¡n cÃ³ má»™t server Ä‘ang cháº¡y vÃ  server Ä‘Ã£ Ä‘Æ°á»£c cáº¥u hÃ¬nh.");
                     }
 
                     var runBattleServerManager = battleServerManagerRun == TrueValue ||
-                        (battleServerManagerRun == "required" && (gameId == "aom" || gameId == "age4"));
+                        (battleServerManagerRun == "required" && (gameId == GameIds.AgeOfMythology || gameId == GameIds.AgeOfEmpires4));
 
                     if (cfg.Server.Start == AutoValue)
                     {

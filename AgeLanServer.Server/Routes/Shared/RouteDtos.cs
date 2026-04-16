@@ -1,3 +1,5 @@
+using AgeLanServer.Server.Internal;
+
 namespace AgeLanServer.Server.Routes.Shared;
 
 /// <summary>
@@ -175,6 +177,7 @@ public sealed class WhisperRequest : TextRequest
 /// </summary>
 public sealed class SetPresenceRequest
 {
+    [BindAlias("presence_id")]
     public int PresenceId { get; set; }
 }
 
@@ -183,6 +186,7 @@ public sealed class SetPresenceRequest
 /// </summary>
 public sealed class SetPresencePropertyRequest
 {
+    [BindAlias("presencePropertyDef_id")]
     public int PresencePropertyId { get; set; }
     public string Value { get; set; } = string.Empty;
     public Dictionary<string, string> Properties { get; set; } = new();
@@ -333,6 +337,7 @@ public sealed class PlatformLoginRequest
     public string AccountType { get; set; } = string.Empty;
     public ulong PlatformUserId { get; set; }
     public string Alias { get; set; } = string.Empty;
+    [BindAlias("title")]
     public string GameId { get; set; } = string.Empty;
     public string MacAddress { get; set; } = string.Empty;
     public ushort ClientLibVersion { get; set; }

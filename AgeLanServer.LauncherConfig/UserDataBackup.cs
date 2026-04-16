@@ -1,3 +1,5 @@
+using AgeLanServer.Common;
+
 namespace AgeLanServer.LauncherConfig;
 
 /// <summary>
@@ -246,17 +248,19 @@ public static class ProfileBackupManager
     {
         // Trong implement day du, can goi commonUserData.Profiles(gameId)
         // O day tra ve danh sach rong - can duoc cap nhat tuy theo game
-        return gameId switch
+        var normalizedGameId = GameIds.Normalize(gameId);
+
+        return normalizedGameId switch
         {
-            "aoe2de" => new List<UserDataPath>
+            var g when g == GameIds.AgeOfEmpires2 => new List<UserDataPath>
             {
                 new() { Path = GetAoE2DEProfilePath() }
             },
-            "aoe3de" => new List<UserDataPath>
+            var g when g == GameIds.AgeOfEmpires3 => new List<UserDataPath>
             {
                 new() { Path = GetAoE3DEProfilePath() }
             },
-            "aoe4" => new List<UserDataPath>
+            var g when g == GameIds.AgeOfEmpires4 => new List<UserDataPath>
             {
                 new() { Path = GetAoE4ProfilePath() }
             },
@@ -353,11 +357,13 @@ public static class MetadataBackupManager
     /// <returns>Doi tuong UserDataPath cho metadata.</returns>
     public static UserDataPath GetMetadata(string gameId)
     {
-        return gameId switch
+        var normalizedGameId = GameIds.Normalize(gameId);
+
+        return normalizedGameId switch
         {
-            "aoe2de" => new UserDataPath { Path = GetAoE2DEMetadataPath() },
-            "aoe3de" => new UserDataPath { Path = GetAoE3DEMetadataPath() },
-            "aoe4" => new UserDataPath { Path = GetAoE4MetadataPath() },
+            var g when g == GameIds.AgeOfEmpires2 => new UserDataPath { Path = GetAoE2DEMetadataPath() },
+            var g when g == GameIds.AgeOfEmpires3 => new UserDataPath { Path = GetAoE3DEMetadataPath() },
+            var g when g == GameIds.AgeOfEmpires4 => new UserDataPath { Path = GetAoE4MetadataPath() },
             _ => new UserDataPath { Path = string.Empty }
         };
     }

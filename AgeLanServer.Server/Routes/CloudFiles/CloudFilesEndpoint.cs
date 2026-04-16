@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Cloud;
 
 namespace AgeLanServer.Server.Routes.CloudFiles;
@@ -172,7 +173,7 @@ public static class CloudFilesEndpoint
 
     /// <summary>
     /// Trích xuất game title từ HTTP context.
-    /// Ưu tiên header X-Game-Title, fallback về "age4".
+    /// Ưu tiên header X-Game-Title, fallback về runtime game hiện tại.
     /// </summary>
     private static string ExtractGameTitle(HttpContext ctx)
     {
@@ -181,7 +182,10 @@ public static class CloudFilesEndpoint
         {
             return headerTitle.ToString()!;
         }
-        return "age4";
+
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId)
+            ? GameIds.AgeOfEmpires4
+            : ServerRuntime.CurrentGameId;
     }
 
     /// <summary>

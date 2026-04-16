@@ -133,6 +133,7 @@ public static class LanServer
         // 2. Đăng ký các API endpoints từ RouteRegistrar (Toàn bộ logic game)
         AgeLanServer.Server.Routes.RouteRegistrar.RegisterGameRoutes(_app, _currentGame);
         AgeLanServer.Server.Routes.RouteRegistrar.RegisterGeneralRoutes(_app);
+        AgeLanServer.Server.Routes.AdditionalRouteRegistrar.RegisterEndpoints(_app);
 
         // Header thông báo
         _app.Use(async (context, next) =>
@@ -154,6 +155,7 @@ public static class LanServer
     private static void InitializeServerRuntime()
     {
         ServerRuntime.Id = _serverId;
+        ServerRuntime.CurrentGameId = _currentGame;
         ServerRuntime.AnnounceMessageData = new Dictionary<int, AnnounceMessageDataV2>
         {
             [AnnounceVersions.Latest] = new AnnounceMessageDataV2

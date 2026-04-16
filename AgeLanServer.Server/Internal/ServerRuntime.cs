@@ -29,4 +29,7 @@ public static class ServerRuntime
 
     /// <summary>Phương thức xác thực đang dùng.</summary>
     public static string Authentication { get; set; } = string.Empty;
+
+    /// <summary>Game hiện tại mà server đang phục vụ.</summary>
+    public static string CurrentGameId { get; set; } = GameIds.AgeOfEmpires4;
 }

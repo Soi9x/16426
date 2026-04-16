@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
 using AgeLanServer.Server.Routes.Shared;
 using Microsoft.AspNetCore.Builder;
@@ -39,9 +40,12 @@ public static class LoginEndpoints
         [FromServices] ILogger<Program> logger)
     {
         var req = new PlatformLoginRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-
         var now = DateTime.UtcNow;
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return PlatformLoginError(now);
+        }
 
         // 1. Lấy hoặc tạo user từ Game.Users()
         // 2. Xóa session cũ nếu có
@@ -71,6 +75,10 @@ public static class LoginEndpoints
         logger.LogInformation("Platform login: SessionId={SessionId}, ProfileId={ProfileId}, Alias={Alias}",
             sessionId, profileId, session.Alias);
 
+        var profileInfo = EncodeProfileInfo(session);
+        var relationshipPayload = BuildInitialRelationshipPayload();
+        var servers = BuildBattleServersResponse();
+
         var response = new object[]
         {
             0,
@@ -89,18 +97,18 @@ public static class LoginEndpoints
                 2,
                 null
             },
-            new object[] { Array.Empty<object>() }, // profile info
+            new object[] { profileInfo },
             0,
             0,
             null,
-            Array.Empty<object>(), // login data
+            Array.Empty<object>(),
             new object[]
             {
                 0,
-                Array.Empty<object>(), // profile info
-                new object[] { 0, Array.Empty<object>(), Array.Empty<object>(), Array.Empty<object>(), Array.Empty<object>(), Array.Empty<object>(), Array.Empty<object>(), null, 1 }, // relationships
-                Array.Empty<object>(), // extra profile info
-                Array.Empty<object>(), // avatar stats
+                profileInfo,
+                relationshipPayload,
+                Array.Empty<object>(),
+                Array.Empty<object>(),
                 null,
                 Array.Empty<object>(),
                 null,
@@ -108,7 +116,7 @@ public static class LoginEndpoints
             },
             Array.Empty<object>(),
             0,
-            Array.Empty<object>() // servers
+            servers
         };
 
         // 8. Đặt cookie reliclink
@@ -160,7 +168,12 @@ public static class LoginEndpoints
         [FromServices] ILogger<Program> logger)
     {
         var req = new ReadSessionRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            var emptyJson = JsonSerializer.Serialize(new object[] { Array.Empty<object>() });
+            return Results.Content($"0,{emptyJson}", "application/json");
+        }
 
         // 1. Lấy session từ context
         var sessionId = ctx.Items["SessionId"] as string
@@ -236,6 +249,60 @@ public static class LoginEndpoints
             0,
             Array.Empty<object>()
         });
+    }
+
+    private static object[] EncodeProfileInfo(SessionData session)
+    {
+        return new object[]
+        {
+            session.ProfileId,
+            session.Alias,
+            session.Presence,
+            new DateTimeOffset(session.CreatedAt).ToUnixTimeSeconds()
+        };
+    }
+
+    private static object[] BuildInitialRelationshipPayload()
+    {
+        return new object[]
+        {
+            0,
+            Array.Empty<object>(),
+            Array.Empty<object>(),
+            Array.Empty<object>(),
+            Array.Empty<object>(),
+            Array.Empty<object>(),
+            Array.Empty<object>(),
+            Array.Empty<object>()
+        };
+    }
+
+    private static object[] BuildBattleServersResponse()
+    {
+        var gameId = ServerRuntime.CurrentGameId;
+        var includeName = gameId != GameIds.AgeOfEmpires1;
+        var includeOutOfBandPort = gameId != GameIds.AgeOfEmpires1;
+
+        var serverData = new List<object>
+        {
+            "",
+        };
+
+        if (includeName)
+        {
+            serverData.Add("localhost");
+        }
+
+        serverData.Add("127.0.0.1");
+        serverData.Add(27012);
+        serverData.Add(27112);
+
+        if (includeOutOfBandPort)
+        {
+            serverData.Add(27212);
+        }
+
+        return new object[] { serverData.ToArray() };
     }
 
     private static int _nextProfileId = 0;

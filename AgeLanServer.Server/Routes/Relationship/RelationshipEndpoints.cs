@@ -1,8 +1,10 @@
-﻿using AgeLanServer.Server.Routes.Shared;
-using AgeLanServer.Server.Routes.Login;
-using AgeLanServer.Common;
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
+using AgeLanServer.Common;
 using AgeLanServer.Server.Internal;
+using AgeLanServer.Server.Routes.Login;
+using AgeLanServer.Server.Routes.Shared;
 using AgeLanServer.Server.Routes.WebSocket;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -10,15 +12,11 @@ using Microsoft.Extensions.Logging;
 
 namespace AgeLanServer.Server.Routes.Relationship;
 
-/// <summary>
-/// ÄÄƒng kÃ½ cÃ¡c endpoint quáº£n lÃ½ quan há»‡ báº¡n bÃ¨: relationships, presence, add friend, ignore, clear.
-/// </summary>
 public static class RelationshipEndpoints
 {
-    // ÄÆ°á»ng dáº«n tá»›i thÆ° má»¥c resources/responses/{gameId}
     private static string GetResponsesFolder()
     {
-        var gameId = GetCurrentGameTitleStatic();
+        var gameId = GetCurrentGameTitle();
         return Path.Combine(AppConstants.ResourcesDir, "responses", gameId);
     }
 
@@ -26,69 +24,47 @@ public static class RelationshipEndpoints
     {
         var group = app.MapGroup("/game/relationship");
 
-        // Láº¥y danh sÃ¡ch relationships (báº¡n bÃ¨)
         group.MapGet("/getRelationships", HandleGetRelationships);
         group.MapPost("/getRelationships", HandleGetRelationships);
 
-        // Láº¥y dá»¯ liá»‡u presence definitions
         group.MapGet("/getPresenceData", HandleGetPresenceData);
-
-        // Cáº­p nháº­t presence
         group.MapPost("/setPresence", HandleSetPresence);
-
-        // Cáº­p nháº­t thuá»™c tÃ­nh presence
         group.MapPost("/setPresenceProperty", HandleSetPresenceProperty);
 
-        // ThÃªm báº¡n bÃ¨
         group.MapPost("/addfriend", HandleAddFriend);
-
-        // Ignore user
         group.MapPost("/ignore", HandleIgnore);
-
-        // XÃ³a relationship
         group.MapPost("/clearRelationship", HandleClearRelationship);
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ láº¥y danh sÃ¡ch relationships.
-    /// Tráº£ vá» táº¥t cáº£ users online nhÆ° lÃ  báº¡n bÃ¨ (do khÃ´ng tÃ­ch há»£p Steam/Xbox friends).
-    /// </summary>
-    private static async Task<IResult> HandleGetRelationships(HttpContext ctx, ILogger<Program> logger)
+    private static Task<IResult> HandleGetRelationships(HttpContext ctx, ILogger<Program> logger)
     {
-        // 1. Láº¥y user tá»« session
         var userId = GetUserIdFromSession(ctx);
+        var gameTitle = GetCurrentGameTitle();
 
-        // 2. MÃ£ hÃ³a thÃ´ng tin profile cá»§a táº¥t cáº£ users cÃ³ presence > 0
-        // Láº¥y táº¥t cáº£ sessions Ä‘ang online tá»« LoginEndpoints
         var onlineUsers = LoginEndpoints.Sessions.Values
             .Where(s => s.Presence > 0 && s.ProfileId != userId)
-            .Select(s => new object[]
-            {
-                s.ProfileId,
-                s.Alias,
-                s.Presence,
-                new DateTimeOffset(s.CreatedAt).ToUnixTimeSeconds()
-            })
+            .Select(EncodeProfileInfo)
+            .Cast<object>()
             .ToArray();
 
-        // 3. Tráº£ vá» dÆ°á»›i dáº¡ng friends hoáº·c lastConnection tÃ¹y game
-        return Results.Ok(new object[]
+        var useFriends = gameTitle is GameIds.AgeOfEmpires3 or GameIds.AgeOfEmpires4 or GameIds.AgeOfMythology;
+
+        var friends = useFriends ? onlineUsers : Array.Empty<object>();
+        var lastConnection = useFriends ? Array.Empty<object>() : onlineUsers;
+
+        return Task.FromResult<IResult>(Results.Ok(new object[]
         {
             0,
-            onlineUsers, // friends
-            Array.Empty<object>(), // ignored
+            friends,
             Array.Empty<object>(),
             Array.Empty<object>(),
-            Array.Empty<object>(), // lastConnection
+            Array.Empty<object>(),
+            lastConnection,
             Array.Empty<object>(),
             Array.Empty<object>()
-        });
+        }));
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ láº¥y dá»¯ liá»‡u presence definitions.
-    /// Tráº£ vá» file presenceData.json Ä‘Ã£ kÃ½.
-    /// </summary>
     private static async Task<IResult> HandleGetPresenceData(HttpContext ctx, ILogger<Program> logger)
     {
         var path = Path.Combine(GetResponsesFolder(), "presenceData.json");
@@ -97,29 +73,33 @@ public static class RelationshipEndpoints
             return Results.Ok(new { });
         }
 
-        var content = await File.ReadAllTextAsync(path);
+        var content = await File.ReadAllTextAsync(path, ctx.RequestAborted);
         var jsonDoc = JsonDocument.Parse(content);
         return Results.Json(jsonDoc.RootElement);
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ cáº­p nháº­t presence cá»§a user.
-    /// ThÃ´ng bÃ¡o thay Ä‘á»•i presence cho táº¥t cáº£ users qua WebSocket.
-    /// </summary>
-    private static async Task<IResult> HandleSetPresence(HttpContext ctx,
-        ILogger<Program> logger)
+    private static async Task<IResult> HandleSetPresence(HttpContext ctx, ILogger<Program> logger)
     {
         var req = new SetPresenceRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-        // 1. Cáº­p nháº­t presence cho user
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         var sessionId = ctx.Items["SessionId"] as string;
         if (!string.IsNullOrEmpty(sessionId) &&
             LoginEndpoints.Sessions.TryGetValue(sessionId, out var session))
         {
             session.Presence = req.PresenceId;
 
-            // 2. Gá»­i PresenceMessage qua WebSocket cho táº¥t cáº£ users
-            var presenceMessage = new { profileId = session.ProfileId, presence = req.PresenceId };
+            var presenceMessage = new
+            {
+                profileId = session.ProfileId,
+                presence = req.PresenceId,
+                properties = session.PresenceProperties
+            };
+
             foreach (var otherSession in LoginEndpoints.Sessions.Values)
             {
                 if (otherSession.ProfileId != session.ProfileId)
@@ -132,30 +112,43 @@ public static class RelationshipEndpoints
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ cáº­p nháº­t thuá»™c tÃ­nh presence.
-    /// ThÃ´ng bÃ¡o thay Ä‘á»•i cho táº¥t cáº£ users qua WebSocket.
-    /// </summary>
-    private static async Task<IResult> HandleSetPresenceProperty(HttpContext ctx,
-        ILogger<Program> logger)
+    private static async Task<IResult> HandleSetPresenceProperty(HttpContext ctx, ILogger<Program> logger)
     {
         var req = new SetPresencePropertyRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-        // 1. Cáº­p nháº­t presence property cho user
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return Results.Ok(new object[] { 2 });
+        }
+
         var sessionId = ctx.Items["SessionId"] as string;
         SessionData? session = null;
-        if (!string.IsNullOrEmpty(sessionId))
+
+        if (!string.IsNullOrEmpty(sessionId) && LoginEndpoints.Sessions.TryGetValue(sessionId, out var currentSession))
         {
-            LoginEndpoints.Sessions.TryGetValue(sessionId, out session);
-            if (session != null)
+            session = currentSession;
+
+            if (req.Properties.Count > 0)
             {
-                // Cáº­p nháº­t presence properties
-                session.PresenceProperties = req.Properties;
+                foreach (var kv in req.Properties)
+                {
+                    session.PresenceProperties[kv.Key] = kv.Value;
+                }
+            }
+            else if (req.PresencePropertyId != 0)
+            {
+                var propertyKey = req.PresencePropertyId.ToString(CultureInfo.InvariantCulture);
+                session.PresenceProperties[propertyKey] = req.Value;
             }
         }
 
-        // 2. Gá»­i PresenceMessage qua WebSocket cho táº¥t cáº£ users
-        var presenceMessage = new { profileId = session?.ProfileId ?? 0, properties = req.Properties };
+        var presenceMessage = new
+        {
+            profileId = session?.ProfileId ?? 0,
+            presence = session?.Presence ?? 0,
+            properties = session?.PresenceProperties ?? new Dictionary<string, string>()
+        };
+
         foreach (var otherSession in LoginEndpoints.Sessions.Values)
         {
             if (otherSession.SessionId != sessionId)
@@ -167,70 +160,86 @@ public static class RelationshipEndpoints
         return Results.Ok(new object[] { 0 });
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ thÃªm báº¡n bÃ¨.
-    /// Hiá»‡n táº¡i chÆ°a Ä‘Æ°á»£c triá»ƒn khai Ä‘áº§y Ä‘á»§, tráº£ vá» lá»—i.
-    /// </summary>
-    private static async Task<IResult> HandleAddFriend(HttpContext ctx,
-        ILogger<Program> logger)
+    private static async Task<IResult> HandleAddFriend(HttpContext ctx, ILogger<Program> logger)
     {
         var req = new FriendRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-        // Triá»ƒn khai thÃªm báº¡n bÃ¨ - lÆ°u vÃ o danh sÃ¡ch friends cá»§a user
-        var userId = GetUserIdFromSession(ctx);
-        var friends = UserFriends.GetOrAdd(userId, _ => new HashSet<int>());
-        friends.Add(req.TargetProfileId);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>() });
+        }
 
-        return Results.Ok(new object[] { 0, new object[] { req.TargetProfileId } });
+        if (TryGetSessionByProfileId(req.TargetProfileId, out var targetSession))
+        {
+            return Results.Ok(new object[] { 2, EncodeProfileInfo(targetSession) });
+        }
+
+        return Results.Ok(new object[] { 2, Array.Empty<object>() });
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ ignore user.
-    /// Hiá»‡n táº¡i chÆ°a Ä‘Æ°á»£c triá»ƒn khai Ä‘áº§y Ä‘á»§, tráº£ vá» lá»—i.
-    /// </summary>
-    private static async Task<IResult> HandleIgnore(HttpContext ctx,
-        ILogger<Program> logger)
+    private static async Task<IResult> HandleIgnore(HttpContext ctx, ILogger<Program> logger)
     {
         var req = new FriendRequest();
-        await HttpHelpers.BindAsync(ctx.Request, req);
-        // Triá»ƒn khai ignore user - lÆ°u vÃ o danh sÃ¡ch ignored
-        var userId = GetUserIdFromSession(ctx);
-        var ignored = UserIgnored.GetOrAdd(userId, _ => new HashSet<int>());
-        ignored.Add(req.TargetProfileId);
+        var bound = await HttpHelpers.BindAsync(ctx.Request, req);
+        if (!bound)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
+        }
 
-        return Results.Ok(new object[] { 0, Array.Empty<object>(), new object[] { req.TargetProfileId } });
+        if (TryGetSessionByProfileId(req.TargetProfileId, out var targetSession))
+        {
+            return Results.Ok(new object[] { 2, EncodeProfileInfo(targetSession), Array.Empty<object>() });
+        }
+
+        return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
     }
 
-    /// <summary>
-    /// Xá»­ lÃ½ xÃ³a relationship.
-    /// Hiá»‡n táº¡i chÆ°a Ä‘Æ°á»£c triá»ƒn khai, tráº£ vá» lá»—i.
-    /// </summary>
-    private static async Task<IResult> HandleClearRelationship(ILogger<Program> logger)
+    private static Task<IResult> HandleClearRelationship(ILogger<Program> logger)
     {
-        return Results.Ok(new object[] { 2 });
+        return Task.FromResult<IResult>(Results.Ok(new object[] { 2 }));
     }
 
-    /// <summary>
-    /// Helper: Láº¥y userId tá»« session hiá»‡n táº¡i.
-    /// </summary>
     private static int GetUserIdFromSession(HttpContext ctx)
     {
         if (ctx.Items.TryGetValue("UserId", out var userIdObj) && userIdObj is int userId)
         {
             return userId;
         }
+
         return 0;
     }
 
-    /// <summary>
-    /// Helper: Láº¥y game title tÄ©nh.
-    /// </summary>
-    private static string GetCurrentGameTitleStatic()
+    private static string GetCurrentGameTitle()
     {
-        return "age4";
+        return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
-    // Kho lÆ°u trá»¯ friends vÃ  ignored theo user ID
-    internal static readonly System.Collections.Concurrent.ConcurrentDictionary<int, HashSet<int>> UserFriends = new();
-    internal static readonly System.Collections.Concurrent.ConcurrentDictionary<int, HashSet<int>> UserIgnored = new();
+    private static bool TryGetSessionByProfileId(int profileId, out SessionData session)
+    {
+        foreach (var candidate in LoginEndpoints.Sessions.Values)
+        {
+            if (candidate.ProfileId == profileId)
+            {
+                session = candidate;
+                return true;
+            }
+        }
+
+        session = null!;
+        return false;
+    }
+
+    private static object[] EncodeProfileInfo(SessionData session)
+    {
+        return new object[]
+        {
+            session.ProfileId,
+            session.Alias,
+            session.Presence,
+            new DateTimeOffset(session.CreatedAt).ToUnixTimeSeconds()
+        };
+    }
+
+    internal static readonly ConcurrentDictionary<int, HashSet<int>> UserFriends = new();
+    internal static readonly ConcurrentDictionary<int, HashSet<int>> UserIgnored = new();
 }

@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using AgeLanServer.Common;
 using AgeLanServer.LauncherConfig;
 
 namespace AgeLanServer.LauncherConfig.Cmd;
@@ -79,6 +80,16 @@ public class CmdRevert
     /// </summary>
     public async Task<int> ExecuteAsync()
     {
+        var normalizedGameId = GameIds.Normalize(GameId);
+        if (normalizedGameId is null)
+        {
+            Console.WriteLine("Loi: Game khong hop le");
+            _errorCode = (int)LauncherError.InvalidGame;
+            return _errorCode;
+        }
+
+        GameId = normalizedGameId;
+
         // Xu ly RemoveAll: dat tat ca cac co thanh true
         if (RemoveAll)
         {
@@ -89,13 +100,13 @@ public class CmdRevert
             _reverseFailed = false;
         }
 
-        // Xu ly game AoE1 va AoE4
-        if (GameId == "aoe1")
+        // Xu ly game Age1 va Age4
+        if (GameId == GameIds.AgeOfEmpires1)
         {
             DoRestoreMetadata = false;
             DoRestoreCaStoreCert = false;
         }
-        else if (GameId == "aoe4")
+        else if (GameId == GameIds.AgeOfEmpires4)
         {
             DoRestoreCaStoreCert = false;
         }
@@ -524,6 +535,6 @@ public class CmdRevert
     /// </summary>
     private static bool IsValidGame(string gameId)
     {
-        return gameId is "aoe1" or "aoe2de" or "aoe3de" or "aoe4";
+        return GameIds.IsValid(gameId);
     }
 }
