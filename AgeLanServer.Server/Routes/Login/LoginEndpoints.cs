@@ -100,7 +100,7 @@ public static class LoginEndpoints
         var gameId = string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
         var profileInfo = EncodeProfileInfo(session, req.ClientLibVersion);
         var relationshipPayload = RelationshipEndpoints.BuildRelationshipsPayload(session);
-        var servers = BuildBattleServersResponse();
+        var servers = BuildBattleServersResponse(ctx);
 
         var response = new List<object>
         {
@@ -375,32 +375,13 @@ public static class LoginEndpoints
         return info.ToArray();
     }
 
-    private static object[] BuildBattleServersResponse()
+    private static object[] BuildBattleServersResponse(HttpContext ctx)
     {
-        var gameId = ServerRuntime.CurrentGameId;
-        var includeName = gameId != GameIds.AgeOfEmpires1;
-        var includeOutOfBandPort = gameId != GameIds.AgeOfEmpires1;
+        var gameId = string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId)
+            ? GameIds.AgeOfEmpires4
+            : ServerRuntime.CurrentGameId;
 
-        var serverData = new List<object>
-        {
-            "",
-        };
-
-        if (includeName)
-        {
-            serverData.Add("localhost");
-        }
-
-        serverData.Add("127.0.0.1");
-        serverData.Add(27012);
-        serverData.Add(27112);
-
-        if (includeOutOfBandPort)
-        {
-            serverData.Add(27212);
-        }
-
-        return new object[] { serverData.ToArray() };
+        return BattleServerRuntime.EncodeLoginServers(ctx, gameId);
     }
 
     private static object[] LoadLoginData(string gameId)

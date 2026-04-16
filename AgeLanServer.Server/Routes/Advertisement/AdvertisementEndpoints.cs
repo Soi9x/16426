@@ -16,11 +16,6 @@ public static class AdvertisementEndpoints
     private static readonly ConcurrentDictionary<int, AdvertisementData> Advertisements = new();
     private static int _nextId;
 
-    private const string BattleServerIp = "127.0.0.1";
-    private const int BattleServerPort = 27012;
-    private const int BattleServerWebSocketPort = 27112;
-    private const int BattleServerOutOfBandPort = 27212;
-
     public static void RegisterEndpoints(WebApplication app)
     {
         var group = app.MapGroup("/game/advertisement");
@@ -86,18 +81,33 @@ public static class AdvertisementEndpoints
         var bound = await HttpHelpers.BindAsync(ctx.Request, req);
         if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
         {
-            return Results.Ok(EncodeHostErrorResponse());
+            return Results.Ok(EncodeHostErrorResponse(ctx));
         }
 
-        if (req.Id != 0 && req.Id != -1)
+        if (req.Id != -1)
         {
-            return Results.Ok(EncodeHostErrorResponse());
+            return Results.Ok(EncodeHostErrorResponse(ctx));
+        }
+
+        var gameId = GetCurrentGameId();
+        if (gameId != GameIds.AgeOfEmpires4)
+        {
+            RemoveUserFromAdvertisements(session.UserId);
+        }
+
+        var isLan = req.ServiceType != 0 || BattleServerRuntime.IsLanRegion(req.RelayRegion);
+        var battleServer = ResolveBattleServer(req.RelayRegion, isLan);
+
+        var joinable = req.Joinable;
+        if (gameId is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3 or GameIds.AgeOfMythology)
+        {
+            joinable = true;
         }
 
         var id = Interlocked.Increment(ref _nextId);
         var hostPeer = new PeerData
         {
-            UserId = req.HostId,
+            UserId = session.UserId,
             StatId = session.StatId,
             Party = req.Party,
             Race = req.Race,
@@ -109,13 +119,14 @@ public static class AdvertisementEndpoints
             Id = id,
             Description = req.Description,
             MapName = req.MapName,
-            HostId = req.HostId,
+            HostId = session.UserId,
+            Party = req.Party,
             MaxPlayers = req.MaxPlayers > 0 ? req.MaxPlayers : (byte)8,
             MatchType = req.MatchType,
             Passworded = req.Passworded,
             Password = req.Password,
             Visible = req.Visible,
-            Joinable = req.Joinable,
+            Joinable = joinable,
             Observable = req.Observable,
             ObserverDelay = req.ObserverDelay,
             ObserverPassword = req.ObserverPassword,
@@ -131,8 +142,13 @@ public static class AdvertisementEndpoints
             PlatformSessionId = req.PsnSessionId,
             Options = req.Options,
             SlotInfo = req.SlotInfo,
-            IsLan = req.ServiceType != 0,
-            XboxSessionId = "0",
+            IsLan = isLan,
+            XboxSessionId = isLan ? "0" : BuildXboxSessionId(gameId),
+            BattleServerName = battleServer.Name,
+            BattleServerIPv4 = battleServer.IPv4,
+            BattleServerPort = battleServer.BsPort,
+            BattleServerWebSocketPort = battleServer.WebSocketPort,
+            BattleServerOutOfBandPort = battleServer.OutOfBandPort,
             CreatedAt = DateTime.UtcNow,
             AdvertisementIp = $"/10.0.11.{(id % 254) + 1}",
             Observers = new List<int>()
@@ -144,7 +160,7 @@ public static class AdvertisementEndpoints
         Advertisements[id] = advertisement;
 
         logger.LogInformation("Advertisement created: ID={Id}, Description={Desc}", id, req.Description);
-        return Results.Ok(EncodeHostResponse(advertisement));
+        return Results.Ok(EncodeHostResponse(ctx, advertisement));
     }
 
     private static async Task<IResult> HandleJoin(HttpContext ctx, [FromServices] ILogger<Program> logger)
@@ -153,27 +169,38 @@ public static class AdvertisementEndpoints
         var bound = await HttpHelpers.BindAsync(ctx.Request, req);
         if (!bound || !LoginEndpoints.TryGetSession(ctx, out var session))
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, CreateDefaultBattleServer(), Array.Empty<object>()));
+        }
+
+        var gameId = GetCurrentGameId();
+        if (gameId != GameIds.AgeOfEmpires4)
+        {
+            RemoveUserFromAdvertisements(session.UserId, req.Id);
         }
 
         if (!Advertisements.TryGetValue(req.Id, out var adv))
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, CreateDefaultBattleServer(), Array.Empty<object>()));
+        }
+
+        if (req.Party != -1 && req.Party != adv.Party)
+        {
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
         if (!adv.Joinable)
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
         if (adv.AppBinaryChecksum != 0 && adv.AppBinaryChecksum != req.AppBinaryChecksum)
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
         if (adv.DataChecksum != 0 && adv.DataChecksum != req.DataChecksum)
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
         if (!string.Equals(adv.ModDllFile, req.ModDllFile, StringComparison.OrdinalIgnoreCase) ||
@@ -182,22 +209,19 @@ public static class AdvertisementEndpoints
             !string.Equals(adv.ModVersion, req.ModVersion, StringComparison.OrdinalIgnoreCase) ||
             adv.VersionFlags != req.VersionFlags)
         {
-            return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
-        if (adv.Passworded)
+        var providedPassword = string.Empty;
+        if (ctx.Request.HasFormContentType)
         {
-            var providedPassword = string.Empty;
-            if (ctx.Request.HasFormContentType)
-            {
-                var form = await ctx.Request.ReadFormAsync();
-                providedPassword = form["password"].ToString();
-            }
+            var form = await ctx.Request.ReadFormAsync();
+            providedPassword = form["password"].ToString();
+        }
 
-            if (!string.Equals(providedPassword, adv.Password, StringComparison.Ordinal))
-            {
-                return Results.Ok(EncodeJoinResponse(2, string.Empty, Array.Empty<object>()));
-            }
+        if (adv.Passworded && !string.Equals(providedPassword, adv.Password, StringComparison.Ordinal))
+        {
+            return Results.Ok(EncodeJoinResponse(ctx, 2, string.Empty, GetBattleServerForAdvertisement(adv), Array.Empty<object>()));
         }
 
         var existingPeer = adv.Peers.FirstOrDefault(p => p.UserId == session.UserId);
@@ -222,7 +246,7 @@ public static class AdvertisementEndpoints
             existingPeer.Ip = adv.AdvertisementIp;
         }
 
-        return Results.Ok(EncodeJoinResponse(0, adv.AdvertisementIp, EncodePeer(adv.Id, existingPeer)));
+        return Results.Ok(EncodeJoinResponse(ctx, 0, adv.AdvertisementIp, GetBattleServerForAdvertisement(adv), EncodePeer(adv.Id, existingPeer)));
     }
 
     private static async Task<IResult> HandleLeave(HttpContext ctx, [FromServices] ILogger<Program> logger)
@@ -268,7 +292,9 @@ public static class AdvertisementEndpoints
         adv.Passworded = req.Passworded;
         adv.Password = req.Password;
         adv.Visible = req.Visible;
-        adv.Joinable = req.Joinable;
+        adv.Joinable = GetCurrentGameId() is GameIds.AgeOfEmpires1 or GameIds.AgeOfEmpires3
+            ? true
+            : req.Joinable;
         adv.Observable = req.Observable;
         adv.ObserverDelay = req.ObserverDelay;
         adv.ObserverPassword = req.ObserverPassword;
@@ -299,11 +325,25 @@ public static class AdvertisementEndpoints
     {
         var query = new WanQuery();
         var search = new SearchQuery();
+        var tags = new TagRequest();
         await HttpHelpers.BindAsync(ctx.Request, query);
         await HttpHelpers.BindAsync(ctx.Request, search);
+        await HttpHelpers.BindAsync(ctx.Request, tags);
+
+        var currentUserId = ctx.Items["UserId"] as int? ?? 0;
+        var gameId = GetCurrentGameId();
+
+        var numericTags = tags.NumericTagNames.Data
+            .Zip(tags.NumericTagValues.Data, (name, value) => new KeyValuePair<string, int>(name, value))
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        var stringTags = tags.StringTagNames.Data
+            .Zip(tags.StringTagValues.Data, (name, value) => new KeyValuePair<string, string>(name, value))
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = Advertisements.Values
-            .Where(a => a.Visible)
+            .Where(a => a.Joinable || a.Visible)
+            .Where(a => currentUserId == 0 || a.Peers.All(p => p.UserId != currentUserId))
+            .Where(a => a.IsLan || string.IsNullOrWhiteSpace(a.RelayRegion) || BattleServerRuntime.IsLanRegion(a.RelayRegion) || BattleServerRuntime.TryGetConfiguredBattleServer(gameId, a.RelayRegion, out _))
             .Where(a => search.AppBinaryChecksum == 0 || a.AppBinaryChecksum == search.AppBinaryChecksum)
             .Where(a => search.DataChecksum == 0 || a.DataChecksum == search.DataChecksum)
             .Where(a => search.MatchType is null || a.MatchType == search.MatchType)
@@ -312,6 +352,7 @@ public static class AdvertisementEndpoints
             .Where(a => string.IsNullOrEmpty(search.ModName) || a.ModName == search.ModName)
             .Where(a => string.IsNullOrEmpty(search.ModVersion) || a.ModVersion == search.ModVersion)
             .Where(a => search.VersionFlags == 0 || a.VersionFlags == search.VersionFlags)
+            .Where(a => MatchesTags(a, numericTags, stringTags))
             .ToList();
 
         var offset = Math.Max(0, query.Offset);
@@ -422,14 +463,11 @@ public static class AdvertisementEndpoints
         var req = new AdvertisementIdRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
 
-        if (!Advertisements.TryGetValue(req.AdvertisementId, out var adv))
+        if (!Advertisements.TryGetValue(req.AdvertisementId, out var adv) || !adv.Observable)
         {
-            return Results.Ok(new object[] { 1 });
-        }
-
-        if (!adv.Observable)
-        {
-            return Results.Ok(new object[] { 4 });
+            var fallback = CreateDefaultBattleServer();
+            var fallbackIp = BattleServerRuntime.ResolveIPv4(ctx, fallback.IPv4);
+            return Results.Ok(new object[] { 2, fallbackIp, fallback.BsPort, fallback.WebSocketPort, fallback.OutOfBandPort, Array.Empty<object>(), 0, Array.Empty<object>() });
         }
 
         var userId = ctx.Items["UserId"] as int? ?? 0;
@@ -438,7 +476,22 @@ public static class AdvertisementEndpoints
             adv.Observers.Add(userId);
         }
 
-        return Results.Ok(new object[] { 0, BattleServerIp });
+        var battleServer = GetBattleServerForAdvertisement(adv);
+        var ip = BattleServerRuntime.ResolveIPv4(ctx, battleServer.IPv4);
+        var userIdsInt = adv.Peers.Select(p => new object[] { p.UserId, Array.Empty<object>() }).ToArray();
+        var userIdsStr = adv.Peers.Select(p => new object[] { p.UserId.ToString(), Array.Empty<object>() }).ToArray();
+
+        return Results.Ok(new object[]
+        {
+            0,
+            ip,
+            battleServer.BsPort,
+            battleServer.WebSocketPort,
+            battleServer.OutOfBandPort,
+            userIdsInt,
+            adv.StartTime ?? 0,
+            userIdsStr
+        });
     }
 
     private static async Task<IResult> HandleStopObserving(HttpContext ctx, [FromServices] ILogger<Program> logger)
@@ -504,17 +557,20 @@ public static class AdvertisementEndpoints
         return Results.Ok(new object[] { 0, encodedAds, Array.Empty<object>() });
     }
 
-    private static object[] EncodeHostErrorResponse()
+    private static object[] EncodeHostErrorResponse(HttpContext ctx)
     {
+        var battleServer = CreateDefaultBattleServer();
+        var ip = BattleServerRuntime.ResolveIPv4(ctx, battleServer.IPv4);
+
         return new object[]
         {
             2,
             0,
             "authtoken",
-            BattleServerIp,
-            BattleServerPort,
-            BattleServerWebSocketPort,
-            BattleServerOutOfBandPort,
+            ip,
+            battleServer.BsPort,
+            battleServer.WebSocketPort,
+            battleServer.OutOfBandPort,
             string.Empty,
             Array.Empty<object>(),
             0,
@@ -526,17 +582,20 @@ public static class AdvertisementEndpoints
         };
     }
 
-    private static object[] EncodeHostResponse(AdvertisementData advertisement)
+    private static object[] EncodeHostResponse(HttpContext ctx, AdvertisementData advertisement)
     {
+        var battleServer = GetBattleServerForAdvertisement(advertisement);
+        var ip = BattleServerRuntime.ResolveIPv4(ctx, battleServer.IPv4);
+
         return new object[]
         {
             0,
             advertisement.Id,
             "authtoken",
-            BattleServerIp,
-            BattleServerPort,
-            BattleServerWebSocketPort,
-            BattleServerOutOfBandPort,
+            ip,
+            battleServer.BsPort,
+            battleServer.WebSocketPort,
+            battleServer.OutOfBandPort,
             advertisement.RelayRegion,
             advertisement.Peers.Select(p => EncodePeer(advertisement.Id, p)).ToArray(),
             0,
@@ -548,16 +607,19 @@ public static class AdvertisementEndpoints
         };
     }
 
-    private static object[] EncodeJoinResponse(int errorCode, string advertisementIp, object[] peerEncoded)
+    private static object[] EncodeJoinResponse(HttpContext ctx, int errorCode, string advertisementIp,
+        BattleServerRuntimeInfo battleServer, object[] peerEncoded)
     {
+        var ip = BattleServerRuntime.ResolveIPv4(ctx, battleServer.IPv4);
+
         return new object[]
         {
             errorCode,
             advertisementIp,
-            BattleServerIp,
-            BattleServerPort,
-            BattleServerWebSocketPort,
-            BattleServerOutOfBandPort,
+            ip,
+            battleServer.BsPort,
+            battleServer.WebSocketPort,
+            battleServer.OutOfBandPort,
             new[] { peerEncoded }
         };
     }
@@ -592,7 +654,7 @@ public static class AdvertisementEndpoints
             advertisement.IsLan ? 1 : 0,
             advertisement.StartTime,
             advertisement.RelayRegion,
-            advertisement.IsLan ? null! : "localhost"
+            advertisement.IsLan ? null! : advertisement.BattleServerName
         };
     }
 
@@ -602,12 +664,103 @@ public static class AdvertisementEndpoints
         {
             advertisementId,
             peer.UserId,
-            -1,
+            peer.Party,
             peer.StatId,
             peer.Race,
             peer.Team,
             peer.Ip
         };
+    }
+
+    private static bool MatchesTags(AdvertisementData advertisement, Dictionary<string, int> numericTags,
+        Dictionary<string, string> stringTags)
+    {
+        foreach (var (name, value) in numericTags)
+        {
+            if (!advertisement.NumericTags.TryGetValue(name, out var actual) || actual != value)
+            {
+                return false;
+            }
+        }
+
+        foreach (var (name, value) in stringTags)
+        {
+            if (!advertisement.StringTags.TryGetValue(name, out var actual) || !string.Equals(actual, value, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static BattleServerRuntimeInfo ResolveBattleServer(string relayRegion, bool isLan)
+    {
+        var gameId = GetCurrentGameId();
+
+        if (isLan || BattleServerRuntime.IsLanRegion(relayRegion))
+        {
+            return BattleServerRuntime.CreateLanBattleServer(gameId, relayRegion);
+        }
+
+        if (BattleServerRuntime.TryGetConfiguredBattleServer(gameId, relayRegion, out var configured))
+        {
+            return configured;
+        }
+
+        return CreateDefaultBattleServer();
+    }
+
+    private static BattleServerRuntimeInfo GetBattleServerForAdvertisement(AdvertisementData advertisement)
+    {
+        if (advertisement.BattleServerPort <= 0 || advertisement.BattleServerWebSocketPort <= 0)
+        {
+            return CreateDefaultBattleServer();
+        }
+
+        return new BattleServerRuntimeInfo(
+            advertisement.RelayRegion,
+            advertisement.BattleServerName,
+            advertisement.BattleServerIPv4,
+            advertisement.BattleServerPort,
+            advertisement.BattleServerWebSocketPort,
+            advertisement.BattleServerOutOfBandPort <= 0
+                ? 27212
+                : advertisement.BattleServerOutOfBandPort);
+    }
+
+    private static BattleServerRuntimeInfo CreateDefaultBattleServer()
+    {
+        return new BattleServerRuntimeInfo(string.Empty, "localhost", "auto", 27012, 27112, 27212);
+    }
+
+    private static string BuildXboxSessionId(string gameId)
+    {
+        var scidEnd = gameId switch
+        {
+            GameIds.AgeOfMythology => "00006fe8b971",
+            GameIds.AgeOfEmpires4 => "00007d18f66e",
+            _ => "000068a451d4"
+        };
+
+        return $"{{\"templateName\":\"GameSession\",\"name\":\"{Guid.NewGuid()}\",\"scid\":\"00000000-0000-0000-0000-{scidEnd}\"}}";
+    }
+
+    private static void RemoveUserFromAdvertisements(int userId, int? exceptAdvertisementId = null)
+    {
+        foreach (var advertisement in Advertisements.Values)
+        {
+            if (exceptAdvertisementId.HasValue && advertisement.Id == exceptAdvertisementId.Value)
+            {
+                continue;
+            }
+
+            advertisement.Peers.RemoveAll(p => p.UserId == userId);
+            if (advertisement.Peers.Count == 0)
+            {
+                Advertisements.TryRemove(advertisement.Id, out _);
+            }
+        }
     }
 
     private static string GetCurrentGameId()
@@ -624,6 +777,7 @@ internal sealed class AdvertisementData
     public string Description { get; set; } = string.Empty;
     public string MapName { get; set; } = string.Empty;
     public int HostId { get; set; }
+    public int Party { get; set; }
     public byte MaxPlayers { get; set; }
     public bool Passworded { get; set; }
     public string Password { get; set; } = string.Empty;
@@ -647,6 +801,11 @@ internal sealed class AdvertisementData
     public string Options { get; set; } = string.Empty;
     public string SlotInfo { get; set; } = string.Empty;
     public bool IsLan { get; set; }
+    public string BattleServerName { get; set; } = "localhost";
+    public string BattleServerIPv4 { get; set; } = "auto";
+    public int BattleServerPort { get; set; }
+    public int BattleServerWebSocketPort { get; set; }
+    public int BattleServerOutOfBandPort { get; set; }
     public string XboxSessionId { get; set; } = "0";
     public string AdvertisementIp { get; set; } = "/10.0.11.1";
     public long? StartTime { get; set; }
