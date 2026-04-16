@@ -1,0 +1,257 @@
+<Window x:Class="AgeLanServer.WpfConfigManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:AgeLanServer.WpfConfigManager.Controls"
+        mc:Ignorable="d"
+        Title="Age LAN - WPF Config Manager"
+        Width="1280"
+        Height="860"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="42" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                MouseLeftButtonDown="TitleBar_OnMouseLeftButtonDown">
+            <DockPanel LastChildFill="True">
+                <TextBlock Text="Age LAN Server - WPF Config Manager"
+                           VerticalAlignment="Center"
+                           Margin="12,0"
+                           FontWeight="SemiBold" />
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="0,4,8,4">
+                    <controls:ModernButton Style="{StaticResource TitleBarButtonStyle}" Width="36" Content="—" Click="MinimizeButton_OnClick" />
+                    <controls:ModernButton Style="{StaticResource TitleBarButtonStyle}" Width="36" Content="▢" Click="MaximizeButton_OnClick" />
+                    <controls:ModernButton Style="{StaticResource TitleBarButtonStyle}" Width="36" Content="✕" Click="CloseButton_OnClick" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Thiết lập chung" Style="{StaticResource SectionTitleTextStyle}" />
+
+                        <TextBlock Text="Theme" Margin="0,4,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernComboBox ItemsSource="{Binding ThemeModes}"
+                                                 SelectedItem="{Binding Theme, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Text="Profile theo game" Margin="0,14,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernComboBox ItemsSource="{Binding Profiles}"
+                                                 DisplayMemberPath="ProfileName"
+                                                 SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
+
+                        <TextBlock Text="Tên profile" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernTextBox Text="{Binding SelectedProfile.ProfileName, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Text="GameId" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernTextBox Text="{Binding SelectedProfile.GameId, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Text="Đường dẫn Global TOML" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernTextBox Text="{Binding SelectedProfile.GlobalTomlPath, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Text="Đường dẫn Game TOML" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        <controls:ModernTextBox Text="{Binding SelectedProfile.GameTomlPath, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <StackPanel Margin="0,16,0,0">
+                            <controls:ModernButton Content="Nạp từ TOML" Command="{Binding LoadTomlCommand}" Margin="0,0,0,8" />
+                            <controls:ModernButton Content="Lưu ra TOML" Command="{Binding SaveTomlCommand}" Margin="0,0,0,8" />
+                            <controls:ModernButton Content="Lưu profile" Command="{Binding SaveProfilesCommand}" Margin="0,0,0,8" />
+                            <controls:ModernButton Content="Khởi động game theo profile" Command="{Binding StartLauncherCommand}" Margin="0,0,0,8" />
+                            <controls:ModernButton Content="Stop + dọn dẹp tài nguyên" Command="{Binding StopLauncherCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <TabControl Grid.Column="2" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
+                <TabItem Header="Launcher profile">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="Khởi động launcher/server" Style="{StaticResource SectionTitleTextStyle}" />
+
+                                    <TextBlock Text="Server executable" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ServerExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Announce port" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.AnnouncePort, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <controls:ModernToggle Content="Auto Start Server" IsChecked="{Binding SelectedProfile.AutoStartServer}" />
+                                    <controls:ModernToggle Content="Auto Stop Server" IsChecked="{Binding SelectedProfile.AutoStopServer}" />
+
+                                    <TextBlock Text="Client executable (steam/msstore/path)" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientExecutable, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Client game path" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientGamePath, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Client extra args" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientExtraArgs, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="6,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Tùy chọn setup/cleanup" Style="{StaticResource SectionTitleTextStyle}" />
+                                    <controls:ModernToggle Content="Trust Certificate" IsChecked="{Binding SelectedProfile.TrustCertificate}" />
+                                    <controls:ModernToggle Content="Map Hosts" IsChecked="{Binding SelectedProfile.MapHosts}" />
+                                    <controls:ModernToggle Content="Isolate Metadata" IsChecked="{Binding SelectedProfile.IsolateMetadata}" />
+                                    <controls:ModernToggle Content="Isolate Profiles" IsChecked="{Binding SelectedProfile.IsolateProfiles}" />
+                                    <controls:ModernToggle Content="Log to file" IsChecked="{Binding SelectedProfile.LogToFile}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Global config.toml">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="[Config]" Style="{StaticResource SectionTitleTextStyle}" />
+                                    <controls:ModernToggle Content="CanAddHost" IsChecked="{Binding SelectedProfile.CanAddHost}" />
+
+                                    <TextBlock Text="CanBroadcastBattleServer" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding OnOffAutoModes}"
+                                                             SelectedItem="{Binding SelectedProfile.CanBroadcastBattleServer, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <controls:ModernToggle Content="Log" IsChecked="{Binding SelectedProfile.CoreLogEnabled}" Margin="0,8,0,0" />
+
+                                    <TextBlock Text="Certificate.CanTrustInPc" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding CertTrustModes}"
+                                                             SelectedItem="{Binding SelectedProfile.CertTrustInPcMode, UpdateSourceTrigger=PropertyChanged}" />
+                                    <controls:ModernToggle Content="Certificate.CanTrustInGame" IsChecked="{Binding SelectedProfile.CertTrustInGame}" Margin="0,8,0,0" />
+
+                                    <TextBlock Text="[Server] Start/Stop mode" Margin="0,10,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding OnOffAutoModes}"
+                                                             SelectedItem="{Binding SelectedProfile.ServerStartMode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                    <controls:ModernComboBox ItemsSource="{Binding OnOffAutoModes}"
+                                                             SelectedItem="{Binding SelectedProfile.ServerStopMode, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <controls:ModernToggle Content="Server.SingleAutoSelect" IsChecked="{Binding SelectedProfile.SingleAutoSelect}" Margin="0,8,0,0" />
+                                    <controls:ModernToggle Content="Server.StartWithoutConfirmation" IsChecked="{Binding SelectedProfile.StartWithoutConfirmation}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="6,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="[Server] chi tiết" Style="{StaticResource SectionTitleTextStyle}" />
+
+                                    <TextBlock Text="Server.Executable" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ServerExecutableToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Server.ExecutableArgs (chuỗi lệnh)" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ServerExecutableArgsToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Server.Host" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ServerHost, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Server.AnnouncePorts (csv)" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.AnnouncePortsToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Server.AnnounceMulticastGroups (csv)" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.AnnounceMulticastToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="BattleServerManager.Run" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding OnOffAutoModes}"
+                                                             SelectedItem="{Binding SelectedProfile.BattleServerManagerRunMode, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="BattleServerManager.Executable" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.BattleServerManagerExecutable, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="BattleServerManager.ExecutableArgs" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.BattleServerManagerArgs, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Games.&lt;id&gt;.BattleServer[0].Ip" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.BattleServerIp, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Game config.game.toml">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="[Config] theo game" Style="{StaticResource SectionTitleTextStyle}" />
+
+                                    <TextBlock Text="IsolateMetadata mode" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding RequiredOnOffModes}"
+                                                             SelectedItem="{Binding SelectedProfile.IsolateMetadataModeToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="IsolateProfiles mode" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernComboBox ItemsSource="{Binding RequiredOnOffModes}"
+                                                             SelectedItem="{Binding SelectedProfile.IsolateProfilesModeToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="SetupCommand" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.SetupCommandToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="RevertCommand" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.RevertCommandToml, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="6,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="[Client] theo game" Style="{StaticResource SectionTitleTextStyle}" />
+
+                                    <TextBlock Text="Client.Executable" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientExecutableToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Client.ExecutableArgs" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientExecutableArgsToml, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Text="Client.Path" Margin="0,8,0,4" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <controls:ModernTextBox Text="{Binding SelectedProfile.ClientPathToml, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </Grid>
+
+        <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,1,1,0">
+            <DockPanel Margin="8,0">
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AgeLanServer.WpfConfigManager</RootNamespace>
+    <AssemblyName>config-manager-wpf</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgeLanServer.Common\AgeLanServer.Common.csproj" />
+    <ProjectReference Include="..\AgeLanServer.Launcher\AgeLanServer.Launcher.csproj" />
+    <ProjectReference Include="..\AgeLanServer.LauncherConfig\AgeLanServer.LauncherConfig.csproj" />
+    <ProjectReference Include="..\AgeLanServer.LauncherCommon\AgeLanServer.LauncherCommon.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
+  </ItemGroup>
+
+</Project>
