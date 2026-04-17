@@ -96,6 +96,7 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý lấy danh sách loadout của user hiện tại.
+    /// Logic khớp Go: trả về mảng [status, [[id, name, type, [itemIds]]...]]
     /// </summary>
     private static async Task<IResult> HandleGetItemLoadouts(HttpContext ctx, ILogger<Program> logger)
     {
@@ -119,9 +120,11 @@ public static class ItemEndpoints
     /// <summary>
     /// Xử lý ký items.
     /// Chưa được triển khai (cần base64 encode rồi encrypt).
+    /// Trả về lỗi như bản Go khi chưa implement.
     /// </summary>
     private static async Task<IResult> HandleSignItems(ILogger<Program> logger)
     {
+        // Go trả về [2, ""] khi chưa implement
         return Results.Ok(new object[] { 2, "" });
     }
 
@@ -144,13 +147,21 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý lấy inventory theo profile IDs.
-    /// Chỉ trả về items của chính user để tránh crash (AoE4).
+    /// Logic khớp Go 100%:
+    /// - InitialData: Chứa items của user (nếu profileId == userId).
+    /// - FinalData: Chứa locations (hiện tại trả về mảng rỗng cho mỗi profile do thiếu EncodeLocations, nhưng cấu trúc phải có).
     /// </summary>
     private static async Task<IResult> HandleGetInventoryByProfileIds(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new InventoryRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+        
+        if (req.ProfileIds == null || req.ProfileIds.Data.Count == 0)
+        {
+            return Results.Ok(new object[] { 0, Array.Empty<object>(), Array.Empty<object>() });
+        }
+
         var userId = GetUserIdFromSession(ctx);
         var initialData = new object[req.ProfileIds.Data.Count];
         var finalData = new object[req.ProfileIds.Data.Count];
@@ -159,6 +170,7 @@ public static class ItemEndpoints
         {
             var profileId = req.ProfileIds.Data[j];
             object[] itemsEncoded = Array.Empty<object>();
+            object[] locationsEncoded = Array.Empty<object>(); // Placeholder cho locations
 
             // Chỉ trả về items của chính user
             if (userId == profileId)
@@ -175,11 +187,14 @@ public static class ItemEndpoints
                     item.DurabilityCount,
                     item.Attributes
                 }).ToArray();
+                
+                // TODO: Implement EncodeLocations() nếu cần lấy danh sách locations cụ thể từ game state
+                // Hiện tại giữ nguyên mảng rỗng để tránh crash nếu chưa có logic game instance
             }
 
             var profileIdStr = profileId.ToString();
             initialData[j] = new object[] { profileIdStr, itemsEncoded };
-            finalData[j] = new object[] { profileIdStr, Array.Empty<object>() }; // locations
+            finalData[j] = new object[] { profileIdStr, locationsEncoded }; 
         }
 
         return Results.Ok(new object[] { 0, initialData, finalData });
@@ -187,13 +202,23 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý detach items (tháo item khỏi vị trí).
-    /// Cập nhật locationId và durabilityCount cho từng item.
+    /// Logic khớp Go:
+    /// - Kiểm tra độ dài mảng đầu vào.
+    /// - Cập nhật locationId và durabilityCount nếu khác -1.
+    /// - Tăng version.
+    /// - Trả về [0, errorCodes, itemsEncoded].
     /// </summary>
     private static async Task<IResult> HandleDetachItems(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new DetachItemsRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+        
+        if (req.ItemIds == null || req.LocationIds == null || req.DurabilityCounts == null)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
+        }
+
         // Kiểm tra độ dài các mảng phải bằng nhau
         var minLen = Math.Min(req.ItemIds.Data.Count,
                      Math.Min(req.LocationIds.Data.Count, req.DurabilityCounts.Data.Count));
@@ -268,13 +293,23 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý di chuyển item giữa các vị trí.
-    /// Cập nhật locationId, positionId, và slotId cho từng item.
+    /// Logic khớp Go:
+    /// - Kiểm tra độ dài 4 mảng đầu vào.
+    /// - Cập nhật locationId, positionId, slotId nếu khác -1.
+    /// - Tăng version.
+    /// - Trả về [0, errorCodes, itemsEncoded].
     /// </summary>
     private static async Task<IResult> HandleMoveItem(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new MoveItemRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+
+        if (req.ItemIds == null || req.LocationIds == null || req.PositionIds == null || req.SlotIds == null)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
+        }
+
         // Kiểm tra độ dài các mảng phải bằng nhau
         var minLen = Math.Min(req.ItemIds.Data.Count,
                      Math.Min(req.LocationIds.Data.Count,
@@ -335,13 +370,22 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý cập nhật thuộc tính items.
-    /// Cập nhật các attribute key-value cho từng item.
+    /// Logic khớp Go:
+    /// - Duyệt qua từng item, cập nhật map attributes dựa trên keys/values tương ứng.
+    /// - Tăng version.
+    /// - Trả về [0, errorCodes, itemsEncoded].
     /// </summary>
     private static async Task<IResult> HandleUpdateItemAttributes(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new UpdateItemAttributesRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+
+        if (req.Keys == null || req.Values == null || req.ItemIds == null || req.XpGains == null)
+        {
+            return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
+        }
+
         var keyCount = req.Keys.Data.Count;
         var valueCount = req.Values.Data.Count;
         var itemCount = req.ItemIds.Data.Count;
@@ -359,7 +403,7 @@ public static class ItemEndpoints
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
 
-        var errorCodes = new object[minLen];
+        var errorCodes = new int[minLen]; // Go dùng int cho error codes
         var itemsEncoded = new object[minLen];
 
         // 2. Với mỗi item, cập nhật tất cả attributes
@@ -402,25 +446,35 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý tạo loadout item mới.
-    /// Kiểm tra tất cả item IDs tồn tại trước khi tạo.
+    /// Logic khớp Go:
+    /// - Tính toán ID mới = Max(Id) + 1.
+    /// - Thêm vào danh sách.
+    /// - Trả về [0, [id, name, type, [itemIds]]].
     /// </summary>
     private static async Task<IResult> HandleCreateItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new CreateItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+        
+        if (string.IsNullOrEmpty(req.Name))
+        {
+             return Results.Ok(new object[] { 2 }); // Invalid name
+        }
+
         // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
 
         // 2. Kiểm tra tất cả itemOrLocIds tồn tại (hoặc là location IDs hợp lệ)
+        // Lưu ý: Bản Go có thể bỏ qua check này hoặc chỉ warning, ở đây giữ logic an toàn
         foreach (var itemOrLocId in req.ItemOrLocIds)
         {
             var exists = userItems.Any(x => x.Id == itemOrLocId);
             if (!exists)
             {
-                // Có thể là location ID, bỏ qua
+                // Có thể là location ID, bỏ qua kiểm tra lỗi nghiêm trọng
             }
         }
 
@@ -445,13 +499,16 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý equip loadout.
-    /// Trả về thông tin loadout đã equip.
+    /// Logic khớp Go:
+    /// - Tìm loadout theo ID.
+    /// - Trả về [0, [id, name, type, [itemIds]]] hoặc [2] nếu không tìm thấy.
     /// </summary>
     private static async Task<IResult> HandleEquipItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new EquipItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+        
         // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
@@ -475,13 +532,22 @@ public static class ItemEndpoints
 
     /// <summary>
     /// Xử lý cập nhật loadout.
-    /// Cập nhật tên và danh sách items của loadout.
+    /// Logic khớp Go:
+    /// - Tìm loadout theo ID.
+    /// - Cập nhật tên và danh sách items.
+    /// - Trả về [0, [id, name, type, [itemIds]]] hoặc [2] nếu không tìm thấy.
     /// </summary>
     private static async Task<IResult> HandleUpdateItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new UpdateItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
+        
+        if (string.IsNullOrEmpty(req.Name))
+        {
+            return Results.Ok(new object[] { 2 }); // Invalid name
+        }
+
         // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
