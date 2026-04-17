@@ -10,12 +10,12 @@ using Microsoft.Extensions.Logging;
 namespace AgeLanServer.Server.Routes.Item;
 
 /// <summary>
-/// ÄÄƒng kÃ½ cÃ¡c endpoint quáº£n lÃ½ item/inventory: definitions, loadouts, sign items, bundles,
+/// ĐĒng ky cac endpoint quản ly item/inventory: definitions, loadouts, sign items, bundles,
 /// inventory by profile, detach, level rewards, move, update attributes, create/update/equip loadout, prices, sales.
 /// </summary>
 public static class ItemEndpoints
 {
-    // ÄÆ°á»ng dáº«n tá»›i thÆ° má»¥c resources/responses/{gameId}
+    // Đường dẫn tai thư mục resources/responses/{gameId}
     private static string GetResponsesFolder()
     {
         var gameId = GetCurrentGameTitleStatic();
@@ -27,59 +27,59 @@ public static class ItemEndpoints
         var group = app.MapGroup("/game/item");
         var gameId = GetCurrentGameTitleStatic();
 
-        // Láº¥y Ä‘á»‹nh nghÄ©a items (JSON Ä‘Ã£ kÃ½)
+        // Lấy Đ'anh nghĩa items (JSON Đ'A ky)
         group.MapGet("/getItemDefinitionsJson", HandleGetItemDefinitionsJson);
 
-        // Láº¥y loadouts cá»§a user
+        // Lấy loadouts của user
         group.MapGet("/getItemLoadouts", HandleGetItemLoadouts);
 
-        // KÃ½ items (chÆ°a triá»ƒn khai)
+        // Ky items (chưa triỒn khai)
         group.MapPost("/signItems", HandleSignItems);
 
         if (gameId != GameIds.AgeOfEmpires1)
         {
-            // Láº¥y bundle items (JSON Ä‘Ã£ kÃ½)
+            // Lấy bundle items (JSON Đ'A ky)
             group.MapGet("/getItemBundleItemsJson", HandleGetItemBundleItemsJson);
 
-            // Láº¥y inventory theo profile IDs
+            // Lấy inventory theo profile IDs
             group.MapGet("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
             group.MapPost("/getInventoryByProfileIDs", HandleGetInventoryByProfileIds);
 
-            // Detach items (thÃ¡o item khá»i vá»‹ trÃ­)
+            // Detach items (thao item khỏi va tri)
             group.MapPost("/detachItems", HandleDetachItems);
 
-            // Láº¥y báº£ng level rewards (JSON Ä‘Ã£ kÃ½)
+            // Lấy bảng level rewards (JSON Đ'A ky)
             group.MapGet("/getLevelRewardsTableJson", HandleGetLevelRewardsTableJson);
 
-            // Di chuyá»ƒn item
+            // Di chuyỒn item
             group.MapPost("/moveItem", HandleMoveItem);
 
-            // Cáº­p nháº­t thuá»™c tÃ­nh items
+            // Cập nhật thuac tinh items
             group.MapPost("/updateItemAttributes", HandleUpdateItemAttributes);
 
-            // Táº¡o loadout item
+            // Tạo loadout item
             group.MapPost("/createItemLoadout", HandleCreateItemLoadout);
 
             // Equip loadout
             group.MapPost("/equipItemLoadout", HandleEquipItemLoadout);
 
-            // Cáº­p nháº­t loadout
+            // Cập nhật loadout
             group.MapPost("/updateItemLoadout", HandleUpdateItemLoadout);
         }
 
-        // Láº¥y giÃ¡ items
+        // Lấy gia items
         group.MapGet("/getItemPrices", HandleGetItemPrices);
 
-        // Láº¥y danh sÃ¡ch sale vÃ  items
+        // Lấy danh sach sale va items
         group.MapGet("/getScheduledSaleAndItems", HandleGetScheduledSaleAndItems);
 
-        // Láº¥y personalized sale items
+        // Lấy personalized sale items
         group.MapGet("/getPersonalizedSaleItems", HandleGetPersonalizedSaleItems);
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y Ä‘á»‹nh nghÄ©a items.
-    /// Tráº£ vá» file itemDefinitions.json Ä‘Ã£ kÃ½ tá»« resources.
+    /// Xử ly lấy Đ'anh nghĩa items.
+    /// Trả về file itemDefinitions.json Đ'A ky từ resources.
     /// </summary>
     private static async Task<IResult> HandleGetItemDefinitionsJson(HttpContext ctx, ILogger<Program> logger)
     {
@@ -95,14 +95,14 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y danh sÃ¡ch loadout cá»§a user hiá»‡n táº¡i.
+    /// Xử ly lấy danh sach loadout của user hian tại.
     /// </summary>
     private static async Task<IResult> HandleGetItemLoadouts(HttpContext ctx, ILogger<Program> logger)
     {
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
 
-        // 2. Láº·p qua táº¥t cáº£ loadouts vÃ  mÃ£ hÃ³a
+        // 2. Lặp qua tất cả loadouts va ma hoa
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
 
         var encodedLoadouts = userLoadouts.Select(l => new object[]
@@ -117,8 +117,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ kÃ½ items.
-    /// ChÆ°a Ä‘Æ°á»£c triá»ƒn khai (cáº§n base64 encode rá»“i encrypt).
+    /// Xử ly ky items.
+    /// Chưa Đ'Aac triỒn khai (cần base64 encode ra'i encrypt).
     /// </summary>
     private static async Task<IResult> HandleSignItems(ILogger<Program> logger)
     {
@@ -126,8 +126,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y bundle items.
-    /// Tráº£ vá» file itemBundleItems.json Ä‘Ã£ kÃ½ tá»« resources.
+    /// Xử ly lấy bundle items.
+    /// Trả về file itemBundleItems.json Đ'A ky từ resources.
     /// </summary>
     private static async Task<IResult> HandleGetItemBundleItemsJson(HttpContext ctx, ILogger<Program> logger)
     {
@@ -143,8 +143,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y inventory theo profile IDs.
-    /// Chá»‰ tráº£ vá» items cá»§a chÃ­nh user Ä‘á»ƒ trÃ¡nh crash (AoE4).
+    /// Xử ly lấy inventory theo profile IDs.
+    /// Cha trả về items của chinh user Đ'aƒ tranh crash (AoE4).
     /// </summary>
     private static async Task<IResult> HandleGetInventoryByProfileIds(HttpContext ctx,
         ILogger<Program> logger)
@@ -160,10 +160,10 @@ public static class ItemEndpoints
             var profileId = req.ProfileIds.Data[j];
             object[] itemsEncoded = Array.Empty<object>();
 
-            // Chá»‰ tráº£ vá» items cá»§a chÃ­nh user
+            // Cha trả về items của chinh user
             if (userId == profileId)
             {
-                // Láº¥y items tá»« UserItems
+                // Lấy items từ UserItems
                 var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
                 itemsEncoded = userItems.Select(item => new object[]
                 {
@@ -186,15 +186,15 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ detach items (thÃ¡o item khá»i vá»‹ trÃ­).
-    /// Cáº­p nháº­t locationId vÃ  durabilityCount cho tá»«ng item.
+    /// Xử ly detach items (thao item khỏi va tri).
+    /// Cập nhật locationId va durabilityCount cho từng item.
     /// </summary>
     private static async Task<IResult> HandleDetachItems(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new DetachItemsRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        // Kiá»ƒm tra Ä‘á»™ dÃ i cÃ¡c máº£ng pháº£i báº±ng nhau
+        // KiỒm tra Đ'a dai cac mảng phải bằng nhau
         var minLen = Math.Min(req.ItemIds.Data.Count,
                      Math.Min(req.LocationIds.Data.Count, req.DurabilityCounts.Data.Count));
         var maxLen = Math.Max(req.ItemIds.Data.Count,
@@ -205,14 +205,14 @@ public static class ItemEndpoints
             return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
         }
 
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
 
         var errorCodes = new int[minLen];
         var itemsEncoded = new object[minLen];
 
-        // 2. Vá»›i má»—i item, cáº­p nháº­t locationId vÃ  durabilityCount (náº¿u khÃ¡c -1)
+        // 2. Vai ma--i item, cập nhật locationId va durabilityCount (nếu khac -1)
         for (int i = 0; i < minLen; i++)
         {
             var itemId = req.ItemIds.Data[i];
@@ -245,13 +245,13 @@ public static class ItemEndpoints
             }
         }
 
-        // 4. MÃ£ hÃ³a item Ä‘Ã£ cáº­p nháº­t
+        // 4. Ma hoa item Đ'A cập nhật
         return Results.Ok(new object[] { 0, errorCodes, itemsEncoded });
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y báº£ng level rewards.
-    /// Tráº£ vá» file levelRewardsTable.json Ä‘Ã£ kÃ½ tá»« resources.
+    /// Xử ly lấy bảng level rewards.
+    /// Trả về file levelRewardsTable.json Đ'A ky từ resources.
     /// </summary>
     private static async Task<IResult> HandleGetLevelRewardsTableJson(HttpContext ctx, ILogger<Program> logger)
     {
@@ -267,15 +267,15 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ di chuyá»ƒn item giá»¯a cÃ¡c vá»‹ trÃ­.
-    /// Cáº­p nháº­t locationId, positionId, vÃ  slotId cho tá»«ng item.
+    /// Xử ly di chuyỒn item giữa cac va tri.
+    /// Cập nhật locationId, positionId, va slotId cho từng item.
     /// </summary>
     private static async Task<IResult> HandleMoveItem(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new MoveItemRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        // Kiá»ƒm tra Ä‘á»™ dÃ i cÃ¡c máº£ng pháº£i báº±ng nhau
+        // KiỒm tra Đ'a dai cac mảng phải bằng nhau
         var minLen = Math.Min(req.ItemIds.Data.Count,
                      Math.Min(req.LocationIds.Data.Count,
                      Math.Min(req.PositionIds.Data.Count, req.SlotIds.Data.Count)));
@@ -288,14 +288,14 @@ public static class ItemEndpoints
             return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
         }
 
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
 
         var errorCodes = new int[minLen];
         var itemsEncoded = new object[minLen];
 
-        // 2. Vá»›i má»—i item, cáº­p nháº­t locationId, positionId, slotId (náº¿u khÃ¡c -1)
+        // 2. Vai ma--i item, cập nhật locationId, positionId, slotId (nếu khac -1)
         for (int i = 0; i < minLen; i++)
         {
             var itemId = req.ItemIds.Data[i];
@@ -334,8 +334,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ cáº­p nháº­t thuá»™c tÃ­nh items.
-    /// Cáº­p nháº­t cÃ¡c attribute key-value cho tá»«ng item.
+    /// Xử ly cập nhật thuac tinh items.
+    /// Cập nhật cac attribute key-value cho từng item.
     /// </summary>
     private static async Task<IResult> HandleUpdateItemAttributes(HttpContext ctx,
         ILogger<Program> logger)
@@ -355,14 +355,14 @@ public static class ItemEndpoints
             return Results.Ok(new object[] { 2, Array.Empty<object>(), Array.Empty<object>() });
         }
 
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
 
         var errorCodes = new object[minLen];
         var itemsEncoded = new object[minLen];
 
-        // 2. Vá»›i má»—i item, cáº­p nháº­t táº¥t cáº£ attributes
+        // 2. Vai ma--i item, cập nhật tất cả attributes
         for (int i = 0; i < minLen; i++)
         {
             var itemId = req.ItemIds.Data[i];
@@ -401,30 +401,30 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ táº¡o loadout item má»›i.
-    /// Kiá»ƒm tra táº¥t cáº£ item IDs tá»“n táº¡i trÆ°á»›c khi táº¡o.
+    /// Xử ly tạo loadout item mai.
+    /// KiỒm tra tất cả item IDs ta'n tại trAac khi tạo.
     /// </summary>
     private static async Task<IResult> HandleCreateItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new CreateItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userItems = UserItems.GetOrAdd(userId, _ => new List<ItemData>());
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
 
-        // 2. Kiá»ƒm tra táº¥t cáº£ itemOrLocIds tá»“n táº¡i (hoáº·c lÃ  location IDs há»£p lá»‡)
+        // 2. KiỒm tra tất cả itemOrLocIds ta'n tại (hoặc la location IDs hợp la)
         foreach (var itemOrLocId in req.ItemOrLocIds)
         {
             var exists = userItems.Any(x => x.Id == itemOrLocId);
             if (!exists)
             {
-                // CÃ³ thá»ƒ lÃ  location ID, bá» qua
+                // Co thỒ la location ID, bỏ qua
             }
         }
 
-        // 3. Táº¡o loadout má»›i
+        // 3. Tạo loadout mai
         var newLoadout = new LoadoutData
         {
             Id = userLoadouts.Count > 0 ? userLoadouts.Max(l => l.Id) + 1 : 1,
@@ -444,26 +444,26 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ equip loadout.
-    /// Tráº£ vá» thÃ´ng tin loadout Ä‘Ã£ equip.
+    /// Xử ly equip loadout.
+    /// Trả về thong tin loadout Đ'A equip.
     /// </summary>
     private static async Task<IResult> HandleEquipItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new ItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
 
-        // 2. TÃ¬m loadout theo ID
+        // 2. Tim loadout theo ID
         var loadout = userLoadouts.FirstOrDefault(l => l.Id == req.Id);
         if (loadout == null)
         {
             return Results.Ok(new object[] { 1, Array.Empty<object>(), Array.Empty<object>() });
         }
 
-        // 3. Tráº£ vá» loadout Ä‘Ã£ mÃ£ hÃ³a
+        // 3. Trả về loadout Đ'A ma hoa
         var encoded = new object[]
         {
             loadout.Id,
@@ -476,26 +476,26 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ cáº­p nháº­t loadout item.
-    /// Cáº­p nháº­t name, type, vÃ  danh sÃ¡ch items trong loadout.
+    /// Xử ly cập nhật loadout item.
+    /// Cập nhật name, type, va danh sach items trong loadout.
     /// </summary>
     private static async Task<IResult> HandleUpdateItemLoadout(HttpContext ctx,
         ILogger<Program> logger)
     {
         var req = new UpdateItemLoadoutRequest();
         await HttpHelpers.BindAsync(ctx.Request, req);
-        // 1. Láº¥y user tá»« session
+        // 1. Lấy user từ session
         var userId = GetUserIdFromSession(ctx);
         var userLoadouts = UserLoadouts.GetOrAdd(userId, _ => new List<LoadoutData>());
 
-        // 2. TÃ¬m loadout theo ID
+        // 2. Tim loadout theo ID
         var loadout = userLoadouts.FirstOrDefault(l => l.Id == req.Id);
         if (loadout == null)
         {
             return Results.Ok(new object[] { 1, Array.Empty<object>() });
         }
 
-        // 3. Cáº­p nháº­t name, type, items
+        // 3. Cập nhật name, type, items
         loadout.Name = req.Name;
         loadout.Type = req.Type;
         loadout.ItemIds = req.ItemOrLocIds;
@@ -510,8 +510,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y giÃ¡ items.
-    /// Hiá»‡n táº¡i tráº£ vá» cáº¥u trÃºc rá»—ng.
+    /// Xử ly lấy gia items.
+    /// Hian tại trả về cấu truc ra--ng.
     /// </summary>
     private static async Task<IResult> HandleGetItemPrices(ILogger<Program> logger)
     {
@@ -519,8 +519,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y danh sÃ¡ch sale vÃ  items.
-    /// Hiá»‡n táº¡i tráº£ vá» cáº¥u trÃºc rá»—ng.
+    /// Xử ly lấy danh sach sale va items.
+    /// Hian tại trả về cấu truc ra--ng.
     /// </summary>
     private static async Task<IResult> HandleGetScheduledSaleAndItems(ILogger<Program> logger)
     {
@@ -528,8 +528,8 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Xá»­ lÃ½ láº¥y personalized sale items.
-    /// Hiá»‡n táº¡i tráº£ vá» cáº¥u trÃºc rá»—ng.
+    /// Xử ly lấy personalized sale items.
+    /// Hian tại trả về cấu truc ra--ng.
     /// </summary>
     private static async Task<IResult> HandleGetPersonalizedSaleItems(ILogger<Program> logger)
     {
@@ -537,11 +537,11 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Helper: Láº¥y userId tá»« session hiá»‡n táº¡i.
+    /// Helper: Lấy userId từ session hian tại.
     /// </summary>
     private static int GetUserIdFromSession(HttpContext ctx)
     {
-        // Láº¥y session tá»« context - Æ°u tiÃªn tá»« Items (Ä‘Æ°á»£c set bá»Ÿi middleware)
+        // Lấy session từ context - ưu tien từ Items (Đ'Aac set baŸi middleware)
         if (ctx.Items.TryGetValue("UserId", out var userIdObj) && userIdObj is int userId)
         {
             return userId;
@@ -550,20 +550,20 @@ public static class ItemEndpoints
     }
 
     /// <summary>
-    /// Helper: Láº¥y game title tÄ©nh.
+    /// Helper: Lấy game title tĩnh.
     /// </summary>
     private static string GetCurrentGameTitleStatic()
     {
         return string.IsNullOrWhiteSpace(ServerRuntime.CurrentGameId) ? GameIds.AgeOfEmpires4 : ServerRuntime.CurrentGameId;
     }
 
-    // Kho lÆ°u trá»¯ items vÃ  loadouts theo user ID
-    internal static readonly ConcurrentDictionary<int, List<ItemData>> UserItems = new();
-    internal static readonly ConcurrentDictionary<int, List<LoadoutData>> UserLoadouts = new();
+    // Kho lưu trữ items va loadouts theo user ID
+    internal static readonly ConcurrentDictionary<int, List<ItemData> UserItems = new();
+    internal static readonly ConcurrentDictionary<int, List<LoadoutData> UserLoadouts = new();
 }
 
 /// <summary>
-/// Dá»¯ liá»‡u item trong bá»™ nhá»›.
+/// Dữ liau item trong ba nha.
 /// </summary>
 internal sealed class ItemData
 {
@@ -578,7 +578,7 @@ internal sealed class ItemData
 }
 
 /// <summary>
-/// Dá»¯ liá»‡u loadout trong bá»™ nhá»›.
+/// Dữ liau loadout trong ba nha.
 /// </summary>
 internal sealed class LoadoutData
 {
